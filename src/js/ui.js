@@ -18,7 +18,7 @@ import {
 import {
   dungeonIndex, bossIndex, skillIndex, DUNGEON_COUNT, BOSS_COUNT, SKILL_COUNT,
   SHOP_ITEMS, SHOP_CATS, itemById, itemByName, yearQuestDay, YEAR_DAYS,
-  hunterClass, rankOfLevel, missionOf, MISSION_INTERVAL_MS, RANKS,
+  hunterClass, rankOfLevel, missionOf, MISSION_INTERVAL_MS, RANKS, ARCHETYPES,
 } from "./data.js";import {
   openBattle, hideFight, isFighting, openShooterDuel, shooterRemoteState,
   shooterRemoteBullet, shooterRemotePowerup, shooterRemoteEnd, hideShooter,
@@ -393,7 +393,7 @@ function startDummy() {
   if (isFighting()) return;
   openBattle({
     mode: "dummy",
-    src: { name: "مترسک تمرین", hp: 500 + st.level * 90, atk: 6, def: 3, emoji: "🎯", skills: [], gold: 0, xp: 0, essenceChance: 0, rank: { name: "تمرین" } },
+    src: { name: "مترسک تمرین", hp: 500 + st.level * 90, atk: 6, def: 3, emoji: "🎯", skills: [], gold: 0, xp: 0, essenceChance: 0, rank: { name: "تمرین" }, element: "سایه", archetype: { key: "warden", name: "نگهبان", tag: "تمرین" } },
     st, toast,
     save: () => app.save(),
     consumeItem: (id, n) => consumeItem(st, id, n),
@@ -551,6 +551,7 @@ export function showPunishmentModal(ev, reason) {
 
 /* ================= دروازه‌ها ================= */
 let gateFilter = "all";
+let gateArch = "all";
 let gateShown = 30;
 let gateSort = "level";
 function paintSort(id, opts, cur, fn) {
@@ -579,6 +580,20 @@ export function renderGates() {
       $("gate-filters").appendChild(b);
     });
   }
+  if ($("gate-arch") && !$("gate-arch").children.length) {
+    const allB = make(`<button class="g-filter active" data-ga="all">همهٔ تیپ‌ها</button>`);
+    allB.addEventListener("click", () => { gateArch = "all"; gateShown = 30; [...$("gate-arch").children].forEach((x) => x.classList.toggle("active", x === allB)); renderGates(); });
+    $("gate-arch").appendChild(allB);
+    ARCHETYPES.forEach((a) => {
+      const b = make(`<button class="g-filter" data-ga="${a.key}">${a.name}</button>`);
+      b.addEventListener("click", () => {
+        gateArch = a.key; gateShown = 30;
+        [...$("gate-arch").children].forEach((x) => x.classList.toggle("active", x === b));
+        renderGates();
+      });
+      $("gate-arch").appendChild(b);
+    });
+  }
   const q = (($("gate-search") && $("gate-search").value) || "").trim();
   if ($("gate-search") && !$("gate-search")._bound) {
     $("gate-search")._bound = true;
@@ -592,7 +607,8 @@ export function renderGates() {
   for (let i = 0; i < DUNGEON_COUNT; i++) {
     const d = dungeonIndex(i);
     if (gateFilter !== "all" && d.rank.key !== gateFilter) continue;
-    if (q && !(`${d.name} ${d.monster}`).includes(q)) continue;
+    if (gateArch !== "all" && d.archetype && d.archetype.key !== gateArch) continue;
+    if (q && !(`${d.name} ${d.monster} ${d.archetype?.name || ""} ${d.element || ""}`).includes(q)) continue;
     order.push(d);
   }
   if (gateSort === "gold") order.sort((a, b) => b.gold - a.gold);
@@ -1667,7 +1683,7 @@ $("btn-settings").addEventListener("click", () => {
     title: "تنظیمات",
     body: `
       <div class="m-meta" style="justify-content:space-between"><span>وضعیت ابر: <b>${cloudState}</b></span><span>دیتابیس: <b>${cloud.schemaReady() ? "✅ نصب شده" : "❌ نصب نشده"}</b></span></div>
-      <div class="m-meta" style="justify-content:space-between"><span>حساب: <b>${esc(st.username)}</b></span><span>Solo System ۲.۴</span></div>
+      <div class="m-meta" style="justify-content:space-between"><span>حساب: <b>${esc(st.username)}</b></span><span>Solo System ۲.۵</span></div>
       <p style="margin-top:10px">ساختهٔ ارشام — داده‌ها روی ابر و دستگاه می‌مانند.</p>
       <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px">
         <button class="btn btn-ghost btn-sm" id="set-sound">${isMuted() ? "🔊 روشن کردن صدا" : "🔇 خاموش کردن صدا"}</button>
@@ -1807,7 +1823,9 @@ $("auth-form").addEventListener("submit", (e) => {
 });
 async function doAuth() {
   const user = $("auth-user").value.trim().toLowerCase();
-  const pass = $("auth-pass").value;
+  const saved = lsGet("account");
+  let pass = $("auth-pass").value;
+  if (!pass && saved && saved.username === user && saved.pass) pass = saved.pass;
   $("auth-err").textContent = "";
   if (!user || !pass) { $("auth-err").textContent = "نام کاربری و رمز را کامل بنویس"; return; }
   if (user.length < 3 || user.length > 20) { $("auth-err").textContent = "نام کاربری باید ۳ تا ۲۰ حرف انگلیسی باشد"; return; }
@@ -1836,9 +1854,17 @@ async function doAuth() {
     } catch (e) {
       r = { error: "اتصال به سرور برقرار نشد" };
     }
-    const netFail = !r || r.error && /اتصال|TIMEOUT|سرور|Failed|fetch|network|offline|no client|PGRST205|نصب نشده|خطای سرور/i.test(String(r.error));
+    const errStr = r && r.error ? String(r.error.message || r.error.code || r.error) : "";
+    const netFail = !r || (r.error && /اتصال|TIMEOUT|سرور|Failed|fetch|network|offline|no client|PGRST205|نصب نشده|خطای سرور|Could not find|schema|JWT|invalid api|function public/i.test(errStr));
     if (r.error) {
-      if (netFail) {
+      const taken = /قبلا|taken|exists|duplicate|ثبت شده/i.test(errStr);
+      if (authTab === "register" && taken) {
+        const tryLogin = await cloud.login(user, pass).catch(() => ({ error: "x" }));
+        if (tryLogin && tryLogin.token && !tryLogin.error) r = tryLogin;
+      }
+    }
+    if (r.error) {
+      if (netFail || authTab === "register" || (authTab === "login" && locals[user])) {
         let local = localAuthFallback(authTab, user, pass);
         if (local.error && authTab === "register") local = localAuthFallback("login", user, pass);
         if (local.error) { $("auth-err").textContent = local.error; return; }
@@ -1855,7 +1881,7 @@ async function doAuth() {
     $("auth-err").textContent = "خطای غیرمنتظره — دوباره بزن";
   } finally {
     btn.disabled = false;
-    btn.textContent = authTab === "login" ? "ورود به سیستم" : "ساخت حساب جدید";
+    btn.textContent = authTab === "login" ? "ورود به سیستم" : "ساخت حساب و ورود";
   }
 }
 $("auth-offline").addEventListener("click", () => app.onOfflineMode());

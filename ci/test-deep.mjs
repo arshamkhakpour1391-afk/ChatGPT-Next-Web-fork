@@ -124,6 +124,16 @@ t("فرار از نبرد برمی‌گردد", () => {
   assert.ok(visible(q("#screen-app")));
 });
 
+click(qa(".nav-btn").find((b) => b.dataset.page === "gates"));
+t("فیلتر تیپ دشمن هست", () => {
+  assert.ok(qa("#gate-arch .g-filter").length >= 8);
+});
+click(qa("#gate-arch .g-filter").find((b) => b.dataset.ga === "phantom") || qa("#gate-arch .g-filter")[1]);
+t("فیلتر تیپ لیست را عوض می‌کند", () => {
+  const sub = q("#gate-list .gate-sub");
+  assert.ok(sub && sub.textContent.length > 2);
+});
+
 t("هیچ خطای JS", () => {
   assert.equal((window.__slsErrors || []).length, 0, (window.__slsErrors || []).join(" | "));
 });

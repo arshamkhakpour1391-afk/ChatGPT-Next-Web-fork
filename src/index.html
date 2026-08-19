@@ -24,7 +24,7 @@
           <svg class="auth-sword" viewBox="0 0 64 64"><path d="M32 6 L38 26 L56 30 L38 34 L32 58 L26 34 L8 30 L26 26 Z" fill="#7c5cff"/><path d="M32 6 L38 26 L32 30 Z" fill="#c7b8ff"/></svg>
         </div>
         <h1 class="auth-title">Solo System</h1>
-        <p class="auth-sub">سیستم سولو لولینگ — ساختهٔ ارشام · نسخه ۲.۴</p>
+        <p class="auth-sub">سیستم سولو لولینگ — ساختهٔ ارشام · نسخه ۲.۵</p>
       </div>
       <div class="auth-tabs">
         <button class="auth-tab" data-authtab="login">ورود</button>
@@ -145,24 +145,25 @@
 
       <!-- ===== تب ماموریت ===== -->
       <div class="page" data-page="missions">
-        <div class="page-head"><h2>ماموریت‌ها</h2><p id="mission-timer">ماموریت جدید تا <b>۰۱:۳۰:۰۰</b></p></div>
+        <div class="page-head"><h2>📜 ماموریت‌ها</h2><p id="mission-timer">ماموریت جدید تا <b>۰۱:۳۰:۰۰</b></p></div>
         <div class="mission-tabs"><button class="m-tab active" data-mtab="active">فعال</button><button class="m-tab" data-mtab="done">انجام‌شده</button></div>
         <div class="list" id="mission-list"></div>
       </div>
 
       <!-- ===== تب دروازه ===== -->
       <div class="page" data-page="gates">
-        <div class="page-head"><h2>دروازه‌ها (دانجن)</h2><p>۱۰٬۰۰۰ دانجن واقعی — از E تا پادشاه سایه‌ها</p></div>
-        <input class="search-box" id="gate-search" type="search" placeholder="جستجوی دروازه یا هیولا..." maxlength="40">
+        <div class="page-head"><h2>🚪 دروازه‌ها</h2><p>۱۰٬۰۰۰ دانجن — ۱۲ تیپ دشمن، ۶ عنصر</p></div>
+        <input class="search-box" id="gate-search" type="search" placeholder="جستجوی دروازه، هیولا یا تیپ..." maxlength="40">
         <div class="sort-bar" id="gate-sort"></div>
         <div class="gate-filters" id="gate-filters"></div>
+        <div class="gate-filters arch-filters" id="gate-arch"></div>
         <div class="list" id="gate-list"></div>
         <div class="load-more-wrap"><button class="btn btn-ghost hidden" id="gates-more">نمایش بیشتر</button></div>
       </div>
 
       <!-- ===== تب نبرد (باس‌ها) ===== -->
       <div class="page" data-page="battle">
-        <div class="page-head"><h2>نبرد با باس‌ها</h2><p>۱٬۰۰۰ باس — هر باس به تو آسیب می‌زند!</p></div>
+        <div class="page-head"><h2>⚔️ نبرد باس</h2><p>۱٬۰۰۰ باس با تیپ و مهارت واقعی</p></div>
         <input class="search-box" id="boss-search" type="search" placeholder="جستجوی باس..." maxlength="40">
         <div class="sort-bar" id="boss-sort"></div>
         <div class="battle-filters" id="battle-filters"></div>
@@ -172,7 +173,7 @@
 
       <!-- ===== تب فروشگاه ===== -->
       <div class="page" data-page="shop">
-        <div class="page-head"><h2>فروشگاه سیستم</h2><p id="shop-refresh">تخفیف روزانه: تا <b>—</b></p></div>
+        <div class="page-head"><h2>🛒 فروشگاه</h2><p id="shop-refresh">تخفیف روزانه: تا <b>—</b></p></div>
         <div class="sort-bar" id="shop-sort"></div>
         <div class="shop-tabs" id="shop-tabs"></div>
         <div class="deal-strip" id="deal-strip"></div>
@@ -181,7 +182,7 @@
 
       <!-- ===== تب کیف ===== -->
       <div class="page" data-page="bag">
-        <div class="page-head"><h2>کیف / موجودی</h2><p>مهارت‌ها را فعال/غیرفعال کن — همه‌چیز ابری ذخیره می‌شود</p></div>
+        <div class="page-head"><h2>🎒 کیف</h2><p>مهارت، آیتم، سایه و امتیاز آمار</p></div>
         <div class="bag-tabs" id="bag-tabs"></div>
         <div class="bag-body" id="bag-body"></div>
       </div>
@@ -230,7 +231,7 @@
 
       <!-- ===== تب رنک ===== -->
       <div class="page" data-page="ranks">
-        <div class="page-head"><h2>لیدربرد جهانی</h2><p>رنک همهٔ کاربران ثبت‌شده — بر اساس قدرت</p></div>
+        <div class="page-head"><h2>🏆 لیدربرد</h2><p>رنک شکارچی‌ها بر اساس قدرت</p></div>
         <div class="rank-tabs" id="rank-tabs"></div>
         <div class="my-rank-card" id="my-rank-card"></div>
         <div class="list" id="rank-list"></div>

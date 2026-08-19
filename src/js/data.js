@@ -50,8 +50,19 @@ export const ARCHETYPES = [
   { key: "venom", name: "زهرآگین", atk: 1.05, def: 0.9, hp: 1.0, tag: "سم مداوم" },
   { key: "berserk", name: "خشمگین", atk: 1.4, def: 0.65, hp: 0.88, tag: "خشم زودهنگام" },
   { key: "warden", name: "نگهبان", atk: 0.9, def: 1.25, hp: 1.15, tag: "سپر می‌سازد" },
+  { key: "phantom", name: "شبح", atk: 1.08, def: 0.72, hp: 0.84, tag: "جاخالی زیاد" },
+  { key: "titan", name: "غول", atk: 0.86, def: 1.12, hp: 1.62, tag: "جان عظیم" },
+  { key: "lich", name: "لیچ", atk: 1.18, def: 0.8, hp: 0.94, tag: "سرقت جان" },
+  { key: "raider", name: "غارتگر", atk: 1.16, def: 0.84, hp: 0.96, tag: "طلا می‌دزدد" },
 ];
 export function archetypeOf(i) { return ARCHETYPES[((i % ARCHETYPES.length) + ARCHETYPES.length) % ARCHETYPES.length]; }
+export const ELEMENT_BEATS = { "آتش": "یخ", "یخ": "رعد", "رعد": "سایه", "سایه": "نور", "نور": "سم", "سم": "آتش" };
+export function elementMult(atkEl, defEl) {
+  if (!atkEl || !defEl) return 1;
+  if (ELEMENT_BEATS[atkEl] === defEl) return 1.35;
+  if (ELEMENT_BEATS[defEl] === atkEl) return 0.8;
+  return 1;
+}
 
 /* ---------- دانجن‌ها (۱۰٬۰۰۰) ---------- */
 export const DUNGEON_COUNT = 10000;

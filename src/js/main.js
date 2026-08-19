@@ -297,7 +297,9 @@ setInterval(() => {
 /* ---------- ذرات پس‌زمینه (زنده و سبک) ---------- */
 function startBgFX() {
   const cv = el("bg-fx");
+  if (!cv || typeof cv.getContext !== "function") return;
   const g = cv.getContext("2d");
+  if (!g) return;
   let W, H;
   const parts = [];
   function resize() {

@@ -63,7 +63,7 @@ function unwrapRpc(data) {
 export async function register(username, pass) {
   if (!sb) initCloud();
   try {
-    const { data, error } = await withTimeout(sb.rpc("register", { p_username: username, p_pass: pass }));
+    const { data, error } = await withTimeout(sb.rpc("register", { p_username: username, p_pass: pass }), 5000);
     if (error) return { error: friendlyError(error) };
     const out = unwrapRpc(data);
     if (out && out.error) return { error: out.error };
@@ -77,7 +77,7 @@ export async function login(username, pass) {
   if (!sb) initCloud();
   if (!username || !pass) return { error: "نام کاربری و رمز را کامل بنویس" };
   try {
-    const { data, error } = await withTimeout(sb.rpc("login", { p_username: username, p_pass: pass }));
+    const { data, error } = await withTimeout(sb.rpc("login", { p_username: username, p_pass: pass }), 5000);
     if (error) return { error: friendlyError(error) };
     const out = unwrapRpc(data);
     if (out && out.error) return { error: out.error };

@@ -12,7 +12,8 @@ import {
 } from "../src/js/engine.js";
 import {
   dungeonIndex, bossIndex, skillIndex, DUNGEON_COUNT, BOSS_COUNT, SKILL_COUNT,
-  SHOP_ITEMS, SHOP_CATS, itemById, itemByName, yearQuestDay, YEAR_DAYS, missionOf
+  SHOP_ITEMS, SHOP_CATS, itemById, itemByName, yearQuestDay, YEAR_DAYS, missionOf,
+  ARCHETYPES, elementMult
 } from "../src/js/data.js";
 
 let passed = 0, failed = 0;
@@ -337,6 +338,11 @@ t("دشمن‌ها نوع و عنصر دارند", () => {
   assert.ok(d.element && d.archetype && d.archetype.name);
   assert.ok(b.element && b.archetype && b.archetype.key);
   assert.notEqual(dungeonIndex(0).archetype.key, dungeonIndex(1).archetype.key);
+  assert.ok(ARCHETYPES.length >= 12, "تیپ دشمن: " + ARCHETYPES.length);
+  assert.ok(ARCHETYPES.some((a) => a.key === "phantom") && ARCHETYPES.some((a) => a.key === "lich"));
+  assert.ok(elementMult("آتش", "یخ") > 1);
+  assert.ok(elementMult("یخ", "آتش") < 1);
+  assert.equal(elementMult("آتش", "آتش"), 1);
 });
 t("مهاجرت ذخیره بعد از بستن برنامه", () => {
   const m = migrateState({ level: 4, gold: 20, stats: { clicks: 9 } });
