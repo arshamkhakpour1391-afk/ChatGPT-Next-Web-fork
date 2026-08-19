@@ -1,0 +1,243 @@
+/* تست‌های موتور بازی — npm test */
+import assert from "node:assert/strict";
+import {
+  newState, xpNeed, maxEnergy, combatStats, computePower, doTrain, addXP, gainGold,
+  addItem, consumeItem, buyItem, sellItem, useItem, equipWeapon, equipArmor, equipTitle,
+  unlockSkill, meetsReq, toggleSkill, MAX_ACTIVE_SKILLS, skillUnlocked,
+  assignShadow, extractShadow, activeMissions, applyProgress, claimMission,
+  dailyQuests, claimDailyQuest, applyPunishment, activeDebuffs, tickState, yearState,
+  claimYearDay, currentPicks, takePick, addRewardPick, missionBucket, calcDamage, newShadow, dailyDeals
+} from "../src/js/engine.js";
+import {
+  dungeonIndex, bossIndex, skillIndex, DUNGEON_COUNT, BOSS_COUNT, SKILL_COUNT,
+  SHOP_ITEMS, SHOP_CATS, itemById, itemByName, yearQuestDay, YEAR_DAYS, missionOf
+} from "../src/js/data.js";
+
+let passed = 0, failed = 0;
+function t(name, fn) {
+  try { fn(); passed++; console.log("  ✓ " + name); }
+  catch (e) { failed++; console.error("  ✗ " + name + "\n    " + (e.stack || e).toString().split("\n").slice(0, 4).join("\n    ")); }
+}
+
+console.log("=== تست موتور ===");
+t("منحنی سختی: سطح ۶ ≈ ۲۰۰۰ کلیک", () => {
+  assert.ok(Math.abs(xpNeed(6) - 2023) < 100, "xpNeed(6)=" + xpNeed(6));
+  assert.equal(xpNeed(1), 30);
+  assert.ok(xpNeed(30) > 400, "سطح ۳۰ باید از ۴۰۰ کلیک بیشتر باشد");
+});
+t("تمرین: کلیک XP می‌دهد و سطح بالا می‌رود", () => {
+  const st = newState("test", "seed");
+  let leveled = 0;
+  for (let i = 0; i < 5000; i++) { const ev = doTrain(st); if (ev.levelUps) leveled += ev.levelUps; }
+  assert.ok(st.stats.clicks === 5000);
+  assert.ok(st.level > 3, "باید حداقل سطح ۳ شده باشد: " + st.level);
+  assert.ok(st.xp >= 0);
+  assert.ok(st.gold === 150, "کلیک طلا نمی‌دهد");
+});
+t("جایزه لول‌آپ: حداکثر ۳ در روز و هر انتخاب متفاوت", () => {
+  const st = newState("t", "s");
+  addRewardPick(st, 10);
+  assert.equal(st.daily.picks.remaining, 3, "سقف ۳");
+  const p1 = currentPicks(st);
+  const got = takePick(st, 0);
+  assert.ok(got, "انتخاب اول");
+  assert.equal(st.daily.picks.remaining, 2);
+  const p2 = currentPicks(st);
+  assert.notDeepEqual(p1[0].name, p2[0].name, "جایزه‌های هر روز/انتخاب متفاوت");
+  takePick(st, 1); takePick(st, 2);
+  assert.equal(currentPicks(st).length, 0, "بعد از ۳ انتخاب تمام می‌شود");
+});
+t("ماموریت: اسلات صفر اجباری است و هر ۲ ساعت عوض می‌شود", () => {
+  const st = newState("t", "s");
+  const list = activeMissions(st);
+  assert.ok(list.length >= 6);
+  assert.ok(list.some((m) => m.mandatory), "ماموریت اجباری هست");
+  const m = list.find((x) => x.mandatory && x.deadline > Date.now());
+  assert.ok(m, "ماموریت اجباریِ فعال باید مهلت آینده داشته باشد");
+});
+t("ماموریت: پیشرفت و دریافت جایزه واقعی", () => {
+  const st = newState("t", "s");
+  const m = activeMissions(st).find((x) => x.deadline > Date.now() && !x.mandatory);
+  assert.ok(m, "ماموریت فعال وجود دارد");
+  applyProgress(st, m.type, m.n * 3);
+  const r = claimMission(st, m.id);
+  assert.ok(r.ok, "claim باید موفق باشد");
+  assert.ok(st.stats.goldEarned > 0);
+});
+t("مجازات: طلا و قدرت کم می‌شود، محافظ جلوگیری می‌کند", () => {
+  const st = newState("t", "s");
+  st.gold = 1000;
+  const before = computePower(st);
+  const ev = applyPunishment(st, "تست", {});
+  assert.ok(ev.goldLoss > 0 && st.gold < 1000);
+  assert.ok(activeDebuffs(st).length === 1);
+  assert.ok(computePower(st) < before, "دیباف قدرت");
+  const ev2 = applyPunishment(st, "تست۲", {});
+  assert.ok(st.punish.count === 2);
+  // محافظ
+  st.punish.shield = 1;
+  const ev3 = applyPunishment(st, "تست۳", {});
+  assert.ok(ev3.blocked, "محافظ باید مجازات را لغو کند");
+});
+t("مسیر ۳۶۵ روزه: جایزه فقط با انجام کارها", () => {
+  const st = newState("t", "s");
+  const r0 = claimYearDay(st);
+  assert.ok(r0.error, "بدون انجام کار نمی‌شود");
+  const q = yearQuestDay(st.year.day);
+  applyProgress(st, "clicks", q.need.clicks + 10);
+  applyProgress(st, "bosses", q.need.kills + 10);
+  applyProgress(st, "dungeons", q.need.dungeons + 10);
+  const r = claimYearDay(st);
+  assert.ok(r.ok, "باید بشود");
+  const r2 = claimYearDay(st);
+  assert.ok(r2.error, "دوباره نمی‌شود");
+});
+t("فروشگاه: خرید واقعی از طلا کم می‌کند و به کیف می‌رود", () => {
+  const st = newState("t", "s");
+  st.gold = 1e12;
+  const it = SHOP_ITEMS.find((x) => x.cat === "weapon" && !x.price.gem);
+  const r = buyItem(st, it.id);
+  assert.ok(r.ok);
+  assert.ok(st.items[it.id] === 1, "آیتم به کیف رفت");
+  const before = st.gold;
+  buyItem(st, it.id);
+  assert.ok(st.gold < before);
+  const s = sellItem(st, it.id, 1);
+  assert.ok(s.ok && st.gold > before - it.price.gold);
+});
+t("مهارت: بدون گرایند باز نمی‌شود، حداکثر ۴ فعال", () => {
+  const st = newState("t", "s");
+  const sk = skillIndex(100); // رنک بالاتر
+  assert.ok(!meetsReq(st, sk.req), "شرط سنگین");
+  const r = unlockSkill(st, 100);
+  assert.ok(r.error, "نباید باز شود");
+  st.stats.clicks = 1e9; st.stats.bosses = 1e6; st.stats.dungeons = 1e6; st.stats.wins = 1e6; st.stats.extracts = 100; st.level = 999; st.gold = 1e15;
+  const r2 = unlockSkill(st, 100);
+  assert.ok(r2.ok, "با گرایند باز می‌شود: " + JSON.stringify(sk.req));
+  for (let i = 0; i < MAX_ACTIVE_SKILLS; i++) {
+    const r3 = unlockSkill(st, i);
+    assert.ok(r3.ok || st.skillsOwned[i], "مهارت " + i + " باز شد");
+    const rr = toggleSkill(st, i);
+    assert.ok(rr.ok, "فعال شد " + i);
+  }
+  const r4 = toggleSkill(st, 5);
+  assert.ok(r4.error, "بیش از ۴ نمی‌شود");
+});
+t("سایه: استخراج و تخصیص حداکثر ۳", () => {
+  const st = newState("t", "s");
+  const r1 = extractShadow(st, { name: "تست", rankKey: "S", power: 1000, emoji: "💀", baseChance: 1.1 });
+  assert.ok(r1.success, "با شانس ۱۱۰٪ حتماً موفق");
+  const ids = Object.keys(st.shadows);
+  assert.equal(ids.length, 1);
+  const a = assignShadow(st, ids[0], true);
+  assert.ok(a.ok);
+  for (let i = 0; i < 5; i++) {
+    const r = extractShadow(st, { name: "x" + i, rankKey: "S", power: 100, emoji: "💀", baseChance: 1.1 });
+    assert.ok(r.success);
+    assignShadow(st, r.id, true);
+  }
+  assert.equal(st.equip.shadows.length, 3, "حداکثر ۳ سایه");
+});
+t("محتوای تولیدی: ۱۰هزار دانجن، ۱۰۰۰ باس، ۱۰۰۰ مهارت، ۱۰۰+ آیتم", () => {
+  assert.equal(DUNGEON_COUNT, 10000);
+  assert.equal(BOSS_COUNT, 1000);
+  assert.equal(SKILL_COUNT, 1000);
+  assert.ok(SHOP_ITEMS.length >= 100, "آیتم‌ها: " + SHOP_ITEMS.length);
+  assert.equal(dungeonIndex(9999).level, 1000, "دانجن آخر = سطح ۱۰۰۰");
+  assert.ok(dungeonIndex(9999).name.includes("پادشاه سایه"));
+  assert.equal(bossIndex(999).level, 1000);
+  // قطعی بودن
+  assert.equal(dungeonIndex(123).name, dungeonIndex(123).name);
+  assert.equal(bossIndex(77).hp, bossIndex(77).hp);
+  assert.equal(skillIndex(555).name, skillIndex(555).name);
+  // همه مهارت‌ها شرط دارند
+  for (let i = 0; i < SKILL_COUNT; i += 97) {
+    const s = skillIndex(i);
+    assert.ok(s.req && s.req.n >= 1 && s.req.label, "skill " + i);
+    assert.ok(s.name.length > 2);
+  }
+  // دانجن‌ها جایزه دارند
+  for (let i = 0; i < DUNGEON_COUNT; i += 777) {
+    const d = dungeonIndex(i);
+    assert.ok(d.gold > 0 && d.xp > 0, "dungeon " + i);
+  }
+  for (let i = 0; i < BOSS_COUNT; i += 173) {
+    const b = bossIndex(i);
+    assert.ok(b.gold > 0 && b.xp > 0 && b.hp > 0 && b.atk > 0, "boss " + i);
+  }
+});
+t("خرید/فروش/استفاده آیتم‌ها", () => {
+  const st = newState("t", "s");
+  st.gold = 1e12;
+  const pot = SHOP_ITEMS.find((x) => x.effects.energy);
+  buyItem(st, pot.id);
+  st.energy = 1;
+  const r = useItem(st, pot.id);
+  assert.ok(r.ok && st.energy > 1);
+  const scroll = SHOP_ITEMS.find((x) => x.effects.xp);
+  buyItem(st, scroll.id);
+  const xp0 = st.xp;
+  useItem(st, scroll.id);
+  assert.ok(st.xp > xp0, "طومار XP کار می‌کند");
+});
+t("تجارت: خرید با جواهر", () => {
+  const st = newState("t", "s");
+  st.gems = 50;
+  const stone = SHOP_ITEMS.find((x) => x.cat === "stone");
+  const r = buyItem(st, stone.id);
+  assert.ok(r.ok && st.gems < 50 && st.items[stone.id] === 1);
+});
+t("تخفیف روزانه: ۳ آیتم متفاوت", () => {
+  const st = newState("t", "s");
+  const d = dailyDeals(st);
+  assert.equal(d.length, 3);
+  assert.equal(new Set(d.map((x) => x.item.id)).size, 3);
+  assert.ok(d.every((x) => x.discount >= 15 && x.discount <= 49));
+});
+t("آمار رزمی: تجهیزات قدرت را زیاد می‌کنند", () => {
+  const st = newState("t", "s");
+  const p0 = computePower(st);
+  st.level = 10;
+  const p1 = computePower(st);
+  assert.ok(p1 > p0, "سطح بالاتر = قدرت بیشتر");
+  const wpn = SHOP_ITEMS.find((x) => x.effects.type === "weapon");
+  st.items[wpn.id] = 1;
+  equipWeapon(st, wpn.id);
+  assert.ok(computePower(st) > p1, "سلاح قدرت می‌دهد");
+  equipArmor(st, null);
+});
+t("محاسبهٔ آسیب در محدودهٔ منطقی", () => {
+  const d = calcDamage(100, 10, 50);
+  assert.ok(d.dmg > 0 && d.dmg < 500);
+  const d2 = calcDamage(10000, 10, 100, 5);
+  assert.ok(d2.crit === true, "با شانس ۱۰۰٪ حتماً کریت");
+});
+t("تیک: دیباف منقضی پاک می‌شود و سالانهٔ ازدست‌رفته مجازات دارد", () => {
+  const st = newState("t", "s");
+  st.punish.debuffs.push({ until: Date.now() - 1000, powerPct: 10, label: "x" });
+  tickState(st);
+  assert.equal(activeDebuffs(st).length, 0);
+  // شبیه‌سازی روز از دست رفته
+  st.year.lastChecked = "2020-01-01";
+  st.year.claimedToday = false;
+  const res = tickState(st);
+  assert.ok(st.pendingPunish || st.punish.count > 0, "مجازات سالانه اعمال شد");
+  assert.equal(st.year.lastChecked, new Date().toLocaleDateString("en-CA"));
+});
+t("کمبو و بهترین کمبو ثبت می‌شود", () => {
+  const st = newState("t", "s");
+  for (let i = 0; i < 60; i++) doTrain(st);
+  assert.ok(st.stats.bestCombo >= 10, "کمبو: " + st.stats.bestCombo);
+});
+t("ماموریت‌های روزانهٔ اجباری تولید و دریافت می‌شوند", () => {
+  const st = newState("t", "s");
+  const qs = dailyQuests(st);
+  assert.ok(Object.keys(qs).length >= 3);
+  const q = Object.values(qs)[0];
+  applyProgress(st, q.type, q.n + 5);
+  const r = claimDailyQuest(st, q.id);
+  assert.ok(r.ok && r.gold > 0);
+});
+
+console.log(`\n=== نتیجه: ${passed} موفق، ${failed} ناموفق ===`);
+if (failed) process.exit(1);

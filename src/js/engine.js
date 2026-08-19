@@ -1,0 +1,601 @@
+/* ================= موتور بازی (منطق خالص — بدون DOM) ================= */
+import {
+  mulberry32, seedOf, pick, range, hashStr, todayKey, weekKey, deepClone, clamp, nowMs, fmt, keyToMs
+} from "./util.js";
+import {
+  rankOfLevel, hunterClass, dungeonIndex, bossIndex, skillIndex,
+  SHOP_ITEMS, itemById, itemByName, missionOf, MISSION_SLOTS, MISSION_INTERVAL_MS,
+  yearQuestDay, dailyPicks, randomTitle, randomWeapon, YEAR_DAYS
+} from "./data.js";
+
+export const STATE_VERSION = 2;
+
+/* ---------- منحنی سختی (لول ۶ ≈ ۲۰۰۰ کلیک) ---------- */
+export function xpNeed(level) { return Math.floor(30 * Math.pow(level, 2.35)); }
+export function maxEnergy(level) { return 20 + level * 2; }
+
+export function newState(username, seedStr) {
+  const seed = seedStr ? hashStr(seedStr) : (Date.now() & 0xffffffff);
+  return {
+    v: STATE_VERSION,
+    username: username || "",
+    seed,
+    level: 1, xp: 0, gold: 150, gems: 3, energy: maxEnergy(1),
+    stats: { clicks: 0, dayClicks: 0, bestCombo: 0, kills: 0, bosses: 0, dungeons: 0, wins: 0, losses: 0, duels: 0, chatMsgs: 0, skillsUsed: 0, goldEarned: 0, extracts: 0, shopBuys: 0, energyUsed: 0 },
+    items: {}, skillsOwned: {},
+    equip: { active: [], weapon: null, armor: null, shadows: [], title: null, titleItem: null },
+    shadows: {},
+    missions: {}, missionSeed: seed,
+    daily: { date: todayKey(), quests: {}, picks: { date: todayKey(), remaining: 0, taken: 0 } },
+    year: { day: 1, streak: 0, prog: { clicks: 0, kills: 0, dungeons: 0 }, claimedToday: false, lastChecked: todayKey(), history: [] },
+    punish: { count: 0, history: [], debuffs: [] },
+    titles: { "مبتدی": true },
+    weekly: { week: weekKey(), xp: 0 },
+    duelLog: [],
+    updatedAt: nowMs()
+  };
+}
+
+/* ---------- آمار رزمی ---------- */
+export function combatStats(st) {
+  const lvl = st.level;
+  const base = {
+    hp: 100 + lvl * 26 + Math.pow(lvl, 1.35) * 12,
+    atk: 10 + lvl * 4 + Math.pow(lvl, 1.3) * 3,
+    def: 2 + lvl * 1.6 + Math.pow(lvl, 1.15),
+    crit: 5 + lvl * 0.4,
+    dodge: 2 + lvl * 0.3,
+    lifesteal: 0, reflect: 0, haste: 1, xpMult: 1, goldMult: 1, extractMult: 1, slayer: 1,
+    energyMax: maxEnergy(lvl),
+  };
+  const addPct = (key, pct) => { base[key] += base[key] * pct / 100; };
+  // آیتم‌های مجهز
+  const w = itemById(st.equip.weapon);
+  if (w) base.atk += w.effects.atk || 0;
+  const a = itemById(st.equip.armor);
+  if (a) base.def += a.effects.def || 0;
+  const t = itemById(st.equip.titleItem);
+  if (t) base.hp += (t.effects.pow || 0) * 2;
+  // مهارت‌های فعال (پسیو)
+  for (const sid of st.equip.active) {
+    const sk = skillIndex(sid);
+    if (!sk || !sk.passive) continue;
+    switch (sk.type.key) {
+      case "crit": base.crit += sk.pct; break;
+      case "vamp": base.lifesteal += Math.min(30, sk.pct); break;
+      case "dodge": base.dodge += sk.pct; break;
+      case "reflect": base.reflect += sk.pct; break;
+      case "focus": base.xpMult *= 1 + sk.pct / 100; break;
+      case "greed": base.goldMult *= 1 + sk.pct / 100; break;
+      case "haste": base.haste *= 1 + sk.pct / 100; break;
+      case "tough": addPct("hp", sk.pct); break;
+      case "energy": addPct("energyMax", sk.pct); break;
+      case "slayer": base.slayer *= 1 + (sk.pct + 15) / 100; break;
+      case "hunter": base.extractMult *= 1 + sk.pct / 100; break;
+      case "iron": addPct("def", sk.pct); break;
+      case "regen": base.regen = Math.max(base.regen || 0, Math.ceil(sk.pct / 4)); break;
+    }
+  }
+  // سایه‌های مجهز
+  for (const sid of st.equip.shadows) {
+    const sh = st.shadows[sid];
+    if (sh) { base.atk += sh.power * 0.5; base.hp += sh.power * 1.2; }
+  }
+  // دیباف مجازات
+  for (const d of st.punish.debuffs) {
+    if (d.until > nowMs()) {
+      if (d.powerPct) { base.atk *= 1 - d.powerPct / 100; base.hp *= 1 - d.powerPct / 100; }
+    }
+  }
+  if (st.hpBonus) base.hp *= 1 + st.hpBonus * 0.05;
+  base.hp = Math.floor(base.hp); base.atk = Math.floor(base.atk); base.def = Math.floor(base.def);
+  base.energyMax = Math.floor(base.energyMax);
+  return base;
+}
+export function computePower(st) {
+  const c = combatStats(st);
+  const shadows = Object.values(st.shadows).reduce((s, x) => s + x.power, 0);
+  const t = itemById(st.equip.titleItem);
+  const titlePow = (t?.effects.pow || 0);
+  return Math.floor((c.hp * 1.2 + c.atk * 4 + c.def * 6 + st.level * 50 + shadows + titlePow) * (1 + st.level / 100));
+}
+
+/* ---------- تمرین (کلیک) ---------- */
+export function doTrain(st) {
+  const c = combatStats(st);
+  st.stats.clicks++;
+  st.stats.dayClicks++;
+  const crit = Math.random() * 100 < c.crit;
+  const mult = (crit ? 2 : 1) * c.xpMult * (1 + (st.punish.xpBoost || 0));
+  const gain = Math.max(1, Math.round(mult));
+  const evt = addXP(st, gain);
+  evt.crit = crit;
+  evt.xp = gain;
+  // کمبو
+  const gap = nowMs() - (st.stats.lastClickTs || 0);
+  if (gap < 1200) st.stats.combo = (st.stats.combo || 0) + 1;
+  else st.stats.combo = 1;
+  st.stats.lastClickTs = nowMs();
+  if (st.stats.combo > st.stats.bestCombo) st.stats.bestCombo = st.stats.combo;
+  evt.combo = st.stats.combo;
+  if (st.stats.combo > 4 && st.stats.combo % 25 === 0) {
+    const bonus = Math.floor(25 * st.level * c.xpMult);
+    addXP(st, bonus); evt.xp += bonus; evt.comboBonus = true;
+  }
+  st.updatedAt = nowMs();
+  return evt;
+}
+
+export function addXP(st, n) {
+  st.xp += n;
+  if (st.weekly.week !== weekKey()) st.weekly = { week: weekKey(), xp: 0 };
+  st.weekly.xp += n;
+  st.dayLog = st.dayLog || { date: todayKey(), xp: 0, clicks: 0, gold: 0 };
+  if (st.dayLog.date !== todayKey()) st.dayLog = { date: todayKey(), xp: 0, clicks: 0, gold: 0 };
+  st.dayLog.xp += n;
+  const evt = { levelUps: 0, leveled: false };
+  let guard = 0;
+  while (st.xp >= xpNeed(st.level) && guard++ < 300) {
+    st.xp -= xpNeed(st.level);
+    st.level++;
+    evt.levelUps++;
+    evt.leveled = true;
+    if (st.level % 10 === 0) st.gems += 2;
+    addRewardPick(st, 1);
+  }
+  st.energy = Math.min(st.energy, maxEnergy(st.level));
+  st.updatedAt = nowMs();
+  return evt;
+}
+
+/* ---------- جایزهٔ لول‌آپ: حداکثر ۳ انتخاب در روز ---------- */
+export function addRewardPick(st, n) {
+  const today = todayKey();
+  const p = st.daily.picks;
+  if (p.date !== today) { p.date = today; p.remaining = 0; p.taken = 0; }
+  const addable = Math.min(n, Math.max(0, 3 - (p.remaining + p.taken)));
+  p.remaining += addable;
+}
+export function currentPicks(st) {
+  const today = todayKey();
+  const p = st.daily.picks;
+  if (p.date !== today) { p.date = today; p.remaining = 0; p.taken = 0; }
+  if (p.remaining <= 0) return [];
+  return dailyPicks(today, p.taken); // هر انتخابِ روز، ست متفاوت
+}
+export function takePick(st, idx) {
+  const picks = currentPicks(st);
+  const p = picks[idx];
+  if (!p || st.daily.picks.remaining <= 0) return null;
+  applyPickEffect(st, p);
+  st.daily.picks.remaining--;
+  st.daily.picks.taken++;
+  st.updatedAt = nowMs();
+  return p;
+}
+export function applyPickEffect(st, p) {
+  switch (p.kind) {
+    case "gold": st.gold += 500 + Math.floor(st.level * 120); break;
+    case "gems": st.gems += 1; break;
+    case "xp": addXP(st, 300 + st.level * 80); break;
+    case "energy": st.energy = maxEnergy(st.level); break;
+    case "hpBonus": st.hpBonus = (st.hpBonus || 0) + 1; break;
+    case "randTitle": { const t = randomTitle(); addItem(st, itemByName(t.name)?.id, 1); break; }
+    case "randWeapon": { const w = randomWeapon(); addItem(st, itemByName(w)?.id, 1); break; }
+    case "item": addItem(st, itemByName(p.item)?.id, p.count || 1); break;
+  }
+}
+
+/* ---------- اقتصاد ---------- */
+export function gainGold(st, n) {
+  st.gold += Math.floor(n);
+  st.stats.goldEarned += Math.floor(n);
+  st.dayLog = st.dayLog || { date: todayKey(), xp: 0, clicks: 0, gold: 0 };
+  if (st.dayLog.date !== todayKey()) st.dayLog = { date: todayKey(), xp: 0, clicks: 0, gold: 0 };
+  st.dayLog.gold += Math.floor(n);
+  st.updatedAt = nowMs();
+}
+export function addItem(st, itemId, count = 1) {
+  if (!itemId) return;
+  st.items[itemId] = (st.items[itemId] || 0) + count;
+  st.updatedAt = nowMs();
+}
+export function consumeItem(st, itemId, count = 1) {
+  if ((st.items[itemId] || 0) < count) return false;
+  st.items[itemId] -= count;
+  if (st.items[itemId] <= 0) delete st.items[itemId];
+  st.updatedAt = nowMs();
+  return true;
+}
+export function buyItem(st, itemId) {
+  const it = itemById(itemId);
+  if (!it) return { error: "آیتم پیدا نشد" };
+  if (it.price.gem != null) {
+    if (st.gems < it.price.gem) return { error: "جواهر کافی نداری" };
+    st.gems -= it.price.gem;
+  } else {
+    if (st.gold < it.price.gold) return { error: "طلا کافی نداری" };
+    st.gold -= it.price.gold;
+  }
+  addItem(st, itemId, 1);
+  st.stats.shopBuys++;
+  st.updatedAt = nowMs();
+  return { ok: true, item: it };
+}
+export function sellItem(st, itemId, count = 1) {
+  const it = itemById(itemId);
+  if (!it || (st.items[itemId] || 0) < count) return { error: "آیتم کافی نداری" };
+  consumeItem(st, itemId, count);
+  const base = it.price.gem != null ? it.price.gem * 150 : it.price.gold || 50;
+  gainGold(st, Math.floor(base * 0.5 * count));
+  return { ok: true };
+}
+export function useItem(st, itemId) {
+  const it = itemById(itemId);
+  if (!it) return { error: "آیتم پیدا نشد" };
+  if ((st.items[itemId] || 0) < 1) return { error: "این آیتم را نداری" };
+  const fx = it.effects;
+  if (fx.heal != null) return { error: "معجون جان فقط در نبرد قابل استفاده است" };
+  if (fx.energy != null) {
+    st.energy = Math.min(maxEnergy(st.level), st.energy + fx.energy);
+    consumeItem(st, itemId);
+    return { ok: true, msg: `انرژی +${fx.energy}` };
+  }
+  if (fx.xp != null) {
+    addXP(st, fx.xp * Math.floor(1 + st.level / 40));
+    consumeItem(st, itemId);
+    return { ok: true, msg: `تجربه +${fmt(fx.xp * Math.floor(1 + st.level / 40))}` };
+  }
+  if (fx.gold != null) {
+    gainGold(st, fx.gold);
+    consumeItem(st, itemId);
+    return { ok: true, msg: `طلا +${fmt(fx.gold)}` };
+  }
+  if (fx.fullEnergy != null) {
+    st.energy = maxEnergy(st.level); consumeItem(st, itemId);
+    return { ok: true, msg: "انرژی کامل شد!" };
+  }
+  if (fx.protect != null) {
+    st.punish.shield = (st.punish.shield || 0) + 1; consumeItem(st, itemId);
+    return { ok: true, msg: "یک مجازات آینده لغو می‌شود" };
+  }
+  if (fx.rerollShop != null) {
+    st.shopReroll = nowMs(); consumeItem(st, itemId);
+    return { ok: true, msg: "فروشگاه تازه شد" };
+  }
+  if (fx.punishShield != null) {
+    st.punish.shield = (st.punish.shield || 0) + 1; consumeItem(st, itemId);
+    return { ok: true, msg: "محافظ مجازات فعال شد" };
+  }
+  if (fx.box != null) {
+    consumeItem(st, itemId);
+    const r = Math.random();
+    let msg;
+    if (r < 0.4) { const g = range(mulberry32(Date.now() & 0xffff), 300, 1500) * st.level; gainGold(st, g); msg = `طلا +${fmt(g)}`; }
+    else if (r < 0.7) { const x = range(mulberry32(Date.now() & 0xffff), 200, 1000) * st.level; addXP(st, x); msg = `تجربه +${fmt(x)}`; }
+    else { st.gems += 2; msg = "جواهر +۲"; }
+    return { ok: true, msg: "جعبهٔ شانس: " + msg };
+  }
+  if (fx.duelTicket != null) { st.duelTicket = (st.duelTicket || 0) + 1; consumeItem(st, itemId); return { ok: true, msg: "تیکت مبارزه ذخیره شد" }; }
+  return { error: "این آیتم اینجا قابل استفاده نیست" };
+}
+export function equipWeapon(st, itemId) {
+  if (itemId && !(st.items[itemId] > 0)) return { error: "این سلاح را نداری" };
+  st.equip.weapon = itemId || null;
+  st.updatedAt = nowMs();
+  return { ok: true };
+}
+export function equipArmor(st, itemId) {
+  if (itemId && !(st.items[itemId] > 0)) return { error: "این زره را نداری" };
+  st.equip.armor = itemId || null;
+  st.updatedAt = nowMs();
+  return { ok: true };
+}
+export function equipTitle(st, itemId) {
+  if (itemId && !(st.items[itemId] > 0)) return { error: "این عنوان را نداری" };
+  st.equip.titleItem = itemId || null;
+  st.updatedAt = nowMs();
+  return { ok: true };
+}
+
+/* ---------- مهارت‌ها ---------- */
+export const MAX_ACTIVE_SKILLS = 4;
+export function skillUnlocked(st, sid) { return !!st.skillsOwned[sid]; }
+export function unlockSkill(st, sid) {
+  const sk = skillIndex(sid);
+  if (!sk) return { error: "مهارت پیدا نشد" };
+  if (!meetsReq(st, sk.req)) return { error: "هنوز شرایطش را نداری: " + sk.req.label };
+  if (st.skillsOwned[sid]) return { error: "از قبل باز است" };
+  const cost = 400 * Math.pow(1.6, Math.floor(sid / 111));
+  if (st.gold < cost) return { error: `برای فعال‌سازی ${fmt(cost)} طلا لازم داری` };
+  st.gold -= cost;
+  st.skillsOwned[sid] = true;
+  st.updatedAt = nowMs();
+  return { ok: true, skill: sk };
+}
+export function meetsReq(st, req) {
+  switch (req.t) {
+    case "level": return st.level >= req.n;
+    case "clicks": return (st.stats.clicks || 0) >= req.n;
+    case "kills": return (st.stats.bosses || 0) >= req.n;
+    case "dungeons": return (st.stats.dungeons || 0) >= req.n;
+    case "duels": return (st.stats.wins || 0) >= req.n;
+    case "extract": return (st.stats.extracts || 0) >= req.n;
+    default: return false;
+  }
+}
+export function toggleSkill(st, sid) {
+  if (!skillUnlocked(st, sid)) return { error: "اول این مهارت را باز کن" };
+  const sk = skillIndex(sid);
+  if (!sk) return { error: "مهارت پیدا نشد" };
+  const act = st.equip.active;
+  const idx = act.indexOf(sid);
+  if (idx >= 0) { act.splice(idx, 1); return { ok: true, on: false }; }
+  if (act.length >= MAX_ACTIVE_SKILLS) return { error: `حداکثر ${MAX_ACTIVE_SKILLS} مهارت می‌تواند فعال باشد` };
+  act.push(sid);
+  st.updatedAt = nowMs();
+  return { ok: true, on: true };
+}
+
+/* ---------- سایه‌ها ---------- */
+let shadowIdCounter = 1;
+export function newShadow(st, name, rankKey, power, emoji) {
+  const id = "sh_" + (Date.now().toString(36) + "_" + (shadowIdCounter++));
+  st.shadows[id] = { id, name, rank: rankKey, power, emoji, created: nowMs() };
+  st.updatedAt = nowMs();
+  return id;
+}
+export function extractShadow(st, source) {
+  // source: {name, rankKey, power, emoji, baseChance, stoneBoost}
+  const chance = Math.min(0.92, source.baseChance * (1 + (source.stoneBoost || 0) / 100));
+  const roll = Math.random();
+  const success = source.baseChance >= 1 || roll < chance;
+  let id = null;
+  if (success) id = newShadow(st, source.name, source.rankKey, Math.floor(source.power * (0.4 + Math.random() * 0.5)), source.emoji || "👤");
+  st.stats.extracts++;
+  st.updatedAt = nowMs();
+  return { success, id, chance, roll };
+}
+export function assignShadow(st, sid, on) {
+  if (!st.shadows[sid]) return { error: "سایه پیدا نشد" };
+  const act = st.equip.shadows;
+  const idx = act.indexOf(sid);
+  if (on && idx < 0) {
+    if (act.length >= 3) return { error: "حداکثر ۳ سایه می‌تواند همراهت باشد" };
+    act.push(sid);
+  } else if (!on && idx >= 0) act.splice(idx, 1);
+  st.updatedAt = nowMs();
+  return { ok: true };
+}
+
+/* ---------- ماموریت‌ها ---------- */
+export function missionBucket(ts = nowMs()) { return Math.floor(ts / MISSION_INTERVAL_MS); }
+export function activeMissions(st) {
+  const now = nowMs();
+  const bucket = missionBucket(now);
+  const list = [];
+  for (let b = Math.max(1, bucket - 8); b <= bucket; b++) {
+    for (let s = 0; s < MISSION_SLOTS; s++) {
+      const m = missionOf(st.seed, s, b);
+      const rec = st.missions[m.id] || {};
+      if (rec.failed) continue;
+      if (rec.done && rec.claimed) continue;
+      if (b < bucket && !m.mandatory) continue; // فقط آخرین سطل عادی
+      list.push({ ...m, prog: rec.prog || 0, done: !!rec.done, claimed: !!rec.claimed, failDeadline: m.mandatory && b < bucket });
+    }
+  }
+  list.sort((a, b2) => (a.mandatory ? -1 : 1) - (b2.mandatory ? -1 : 1) || a.deadline - b2.deadline);
+  return list;
+}
+export function applyProgress(st, type, amount) {
+  if (!amount) return;
+  const now = nowMs();
+  const bucket = missionBucket(now);
+  for (let b = Math.max(1, bucket - 8); b <= bucket; b++) {
+    for (let s = 0; s < MISSION_SLOTS; s++) {
+      const m = missionOf(st.seed, s, b);
+      if (m.type !== type) continue;
+      const rec = st.missions[m.id] = st.missions[m.id] || { prog: 0 };
+      if (rec.done) continue;
+      rec.prog = (rec.prog || 0) + amount;
+      if (rec.prog >= m.n) { rec.done = true; rec.doneAt = now; }
+    }
+  }
+  // ماموریت روزانه
+  for (const q of Object.values(st.daily.quests)) {
+    if (q.type === type && !q.done) {
+      q.prog = (q.prog || 0) + amount;
+      if (q.prog >= q.n) q.done = true;
+    }
+  }
+  // مسیر سالانه
+  if (st.year.prog) {
+    const yk = type === "bosses" ? "kills" : type;
+    if (st.year.prog[yk] != null) {
+      st.year.prog[yk] = (st.year.prog[yk] || 0) + amount;
+    }
+  }
+  st.updatedAt = now;
+}
+export function claimMission(st, mid) {
+  const rec = st.missions[mid];
+  if (!rec || !rec.done || rec.claimed) return { error: "این ماموریت قابل دریافت نیست" };
+  const m = findMission(st, mid);
+  if (!m) return { error: "ماموریت منقضی شده" };
+  rec.claimed = true;
+  gainGold(st, m.reward.gold);
+  st.gems += m.reward.gems || 0;
+  addXP(st, m.reward.xp);
+  st.updatedAt = nowMs();
+  return { ok: true, m };
+}
+function findMission(st, mid) {
+  const [b, s] = mid.split(":").map(Number);
+  return missionOf(st.seed, s, b);
+}
+
+/* ---------- ماموریت‌های روزانهٔ اجباری ---------- */
+export function dailyQuests(st) {
+  const today = todayKey();
+  if (st.daily.date !== today || !st.daily.quests || !Object.keys(st.daily.quests).length) {
+    // روز جدید: روز قبل چک شد
+    st.daily.date = today;
+    st.daily.quests = generateDailyQuests(st);
+  }
+  return st.daily.quests;
+}
+function generateDailyQuests(st) {
+  const rng = mulberry32(seedOf("daily", todayKey()));
+  const clicks = 200 + st.level * 25;
+  const kills = Math.max(1, 2 + Math.floor(st.level / 12));
+  const dungeons = Math.max(1, 1 + Math.floor(st.level / 25));
+  const duelOrChat = rng() < 0.5 ? { t: "duels", n: 1, label: "برد در رقابت" } : { t: "chat", n: 3 + Math.floor(st.level / 10), label: "پیام در چت" };
+  return {
+    q1: { id: "dq_clicks", type: "clicks", n: clicks, prog: 0, done: false, claimed: false, label: `تمرین: ${clicks} کلیک` },
+    q2: { id: "dq_kills", type: "bosses", n: kills, prog: 0, done: false, claimed: false, label: `شکار: ${kills} باس` },
+    q3: { id: "dq_dungeons", type: "dungeons", n: dungeons, prog: 0, done: false, claimed: false, label: `پاکسازی: ${dungeons} دانجن` },
+    q4: { id: "dq_social", type: duelOrChat.t, n: duelOrChat.n, prog: 0, done: false, claimed: false, label: duelOrChat.label },
+  };
+}
+export function claimDailyQuest(st, qid) {
+  const q = st.daily.quests[qid] || Object.values(st.daily.quests).find((x) => x.id === qid);
+  if (!q || !q.done || q.claimed) return { error: "قابل دریافت نیست" };
+  q.claimed = true;
+  const g = 200 + st.level * 40;
+  gainGold(st, g);
+  addXP(st, 300 + st.level * 60);
+  st.gems += 1;
+  st.updatedAt = nowMs();
+  return { ok: true, gold: g };
+}
+
+/* ---------- مجازات واقعی ---------- */
+export function applyPunishment(st, reason, opts = {}) {
+  if (st.punish.shield > 0) {
+    st.punish.shield--;
+    st.punish.history.unshift({ ts: nowMs(), reason, blocked: true });
+    st.updatedAt = nowMs();
+    return { blocked: true };
+  }
+  const goldLoss = Math.floor(st.gold * 0.25) + 100;
+  st.gold = Math.max(0, st.gold - goldLoss);
+  st.punish.count++;
+  const until = nowMs() + (opts.hours || 24) * 3600 * 1000;
+  st.punish.debuffs.push({ until, powerPct: opts.powerPct || 10, label: "ضعف سیستم" });
+  const ev = {
+    blocked: false, goldLoss,
+    until, reason,
+    debuffPct: opts.powerPct || 10
+  };
+  st.punish.history.unshift({ ts: nowMs(), reason, goldLoss });
+  if (st.punish.history.length > 50) st.punish.history.length = 50;
+  // شکستن زنجیره سالانه
+  if (opts.year) { st.year.streak = 0; }
+  st.updatedAt = nowMs();
+  return ev;
+}
+export function cleanDebuffs(st) {
+  const now = nowMs();
+  const before = st.punish.debuffs.length;
+  st.punish.debuffs = st.punish.debuffs.filter((d) => d.until > now);
+  return before !== st.punish.debuffs.length;
+}
+export function activeDebuffs(st) {
+  const now = nowMs();
+  return st.punish.debuffs.filter((d) => d.until > now);
+}
+
+/* ---------- مسیر ۳۶۵ روزه ---------- */
+export function yearState(st) {
+  const today = todayKey();
+  const y = st.year;
+  if (y.lastChecked !== today) {
+    const prevMs = keyToMs(y.lastChecked);
+    const nowMs2 = keyToMs(today);
+    let missedDays = 0;
+    if (!isNaN(prevMs) && !y.claimedToday && prevMs < nowMs2) missedDays++;
+    // اگر روزِ قبل انجام شده بود ولی چند روز غیبت بوده
+    if (!isNaN(prevMs)) {
+      const gap = Math.floor((nowMs2 - prevMs) / 86400000);
+      if (gap > 1) missedDays += gap - 1;
+      for (let k = 0; k < gap; k++) {
+        y.day = Math.min(YEAR_DAYS, y.day + 1);
+        y.streak = k === 0 && y.claimedToday ? y.streak + 1 : 0;
+      }
+      y.claimedToday = false;
+      y.prog = { clicks: 0, kills: 0, dungeons: 0 };
+    }
+    if (isNaN(prevMs)) y.claimedToday = false;
+    y.lastChecked = today;
+    if (missedDays > 0) {
+      const missed = { ts: nowMs(), day: Math.max(1, y.day - missedDays), days: missedDays };
+      y.history.unshift(missed);
+      if (y.history.length > 30) y.history.length = 30;
+      return { missed, year: y };
+    }
+  }
+  return { year: y };
+}
+export function claimYearDay(st) {
+  const q = yearQuestDay(st.year.day);
+  const p = st.year.prog;
+  if (p.clicks < q.need.clicks || p.kills < q.need.kills || p.dungeons < q.need.dungeons) {
+    return { error: "کارهای امروز هنوز کامل نشده" };
+  }
+  if (st.year.claimedToday) return { error: "امروز را دریافت کرده‌ای" };
+  st.year.claimedToday = true;
+  gainGold(st, q.reward.gold);
+  addXP(st, q.reward.xp);
+  st.gems += q.reward.gems || 0;
+  st.updatedAt = nowMs();
+  return { ok: true, q };
+}
+
+/* ---------- محاسبهٔ آسیب ---------- */
+export function calcDamage(atk, def, critChance, mult = 1) {
+  const raw = Math.max(1, atk * mult - def * 0.4);
+  const crit = Math.random() * 100 < critChance;
+  const dmg = Math.floor(raw * (0.85 + Math.random() * 0.3) * (crit ? 2 : 1));
+  return { dmg, crit };
+}
+
+/* ---------- فروشگاه روزانه ---------- */
+export function dailyDeals(st) {
+  const today = todayKey();
+  const rng = mulberry32(seedOf("deals", today));
+  const cats = ["weapon", "armor", "potion", "scroll", "stone", "title", "special"];
+  const deals = [];
+  const used = new Set();
+  while (deals.length < 3) {
+    const cat = cats[Math.floor(rng() * cats.length)];
+    const pool = SHOP_ITEMS.filter((x) => x.cat === cat && !used.has(x.id));
+    if (!pool.length) break;
+    const it = pool[Math.floor(rng() * pool.length)];
+    used.add(it.id);
+    const discount = 15 + Math.floor(rng() * 35);
+    deals.push({
+      item: it,
+      discount,
+      price: it.price.gem != null
+        ? { gem: Math.max(1, Math.floor(it.price.gem * (1 - discount / 100))) }
+        : { gold: Math.floor(it.price.gold * (1 - discount / 100)) }
+    });
+  }
+  return deals;
+}
+
+/* ---------- وضعیت تیک ---------- */
+export function tickState(st) {
+  const now = nowMs();
+  let changed = false;
+  if (cleanDebuffs(st)) changed = true;
+  const yr = yearState(st);
+  if (yr.missed) {
+    const ev = applyPunishment(st, `مسیر سالانه: روز ${yr.year.day} کامل نشد`, { year: true, powerPct: 8 });
+    changed = true;
+    st.pendingPunish = ev;
+  }
+  dailyQuests(st);
+  if (st.updatedAt !== now) { st.updatedAt = now; changed = true; }
+  return changed;
+}

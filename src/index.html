@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05060a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>سیستم سولو لولینگ</title>
+<style id="app-css"></style>
+</head>
+<body>
+<div id="app" class="app">
+  <!-- لایه ذرات زنده پس‌زمینه -->
+  <canvas id="bg-fx" class="bg-fx"></canvas>
+
+  <!-- ============ صفحه ورود / ثبت نام ============ -->
+  <section id="screen-auth" class="screen screen-auth hidden">
+    <div class="auth-card">
+      <div class="auth-logo">
+        <div class="sys-frame">
+          <div class="sys-frame-corner tl"></div><div class="sys-frame-corner tr"></div>
+          <div class="sys-frame-corner bl"></div><div class="sys-frame-corner br"></div>
+          <svg class="auth-sword" viewBox="0 0 64 64"><path d="M32 6 L38 26 L56 30 L38 34 L32 58 L26 34 L8 30 L26 26 Z" fill="#7c5cff"/><path d="M32 6 L38 26 L32 30 Z" fill="#c7b8ff"/></svg>
+        </div>
+        <h1 class="auth-title">سیستم سولو لولینگ</h1>
+        <p class="auth-sub">به دنیای شکارچی‌ها خوش آمدی — ساختهٔ ارشام</p>
+      </div>
+      <div class="auth-tabs">
+        <button class="auth-tab active" data-authtab="login">ورود</button>
+        <button class="auth-tab" data-authtab="register">ثبت‌نام</button>
+      </div>
+      <form id="auth-form" class="auth-form">
+        <label class="field">
+          <span>نام کاربری <i>(انگلیسی — تا آخر با همین اسم می‌مانی)</i></span>
+          <input id="auth-user" type="text" autocomplete="username" placeholder="مثلا: arsham" maxlength="20">
+        </label>
+        <label class="field">
+          <span>رمز عبور</span>
+          <input id="auth-pass" type="password" autocomplete="current-password" placeholder="حداقل ۴ حرف" maxlength="64">
+        </label>
+        <p class="auth-err" id="auth-err"></p>
+        <button class="btn btn-primary btn-big" id="auth-submit" type="submit">ورود به سیستم</button>
+        <button class="btn btn-ghost btn-big hidden" id="auth-offline" type="button">بازی آفلاین (بدون حساب)</button>
+        <p class="auth-note" id="auth-note"></p>
+      </form>
+    </div>
+  </section>
+
+  <!-- ============ صفحه اصلی ============ -->
+  <section id="screen-app" class="screen hidden">
+    <header class="topbar">
+      <div class="topbar-right">
+        <div class="hunter-chip" id="hunter-chip">
+          <div class="avatar" id="avatar"><span id="avatar-letter">ش</span></div>
+          <div class="hunter-info">
+            <div class="hunter-name" id="hunter-name">—</div>
+            <div class="hunter-rank" id="hunter-rank">رتبه E</div>
+          </div>
+        </div>
+      </div>
+      <div class="topbar-res">
+        <div class="res-chip" title="طلا"><span class="res-ico gold-ico"></span><b id="res-gold">0</b></div>
+        <div class="res-chip" title="جواهر"><span class="res-ico gem-ico"></span><b id="res-gems">0</b></div>
+        <div class="res-chip" title="انرژی"><span class="res-ico energy-ico"></span><b id="res-energy">0</b></div>
+      </div>
+      <div class="topbar-left">
+        <button class="icon-btn" id="btn-notifs" title="اعلان‌ها"><svg viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5S10.5 3.17 10.5 4v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg><span class="dot hidden" id="notif-dot"></span></button>
+        <button class="icon-btn" id="btn-settings" title="تنظیمات"><svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg></button>
+      </div>
+    </header>
+
+    <div class="stat-strip">
+      <div class="stat-xp">
+        <div class="xp-top"><span id="xp-label">سطح ۱</span><span id="xp-nums">۰ / ۳۰</span></div>
+        <div class="bar xp-bar"><div class="bar-fill" id="xp-fill"></div><div class="bar-glow"></div></div>
+      </div>
+      <div class="stat-power" id="stat-power"><span class="power-ico"></span><b id="power-num">10</b><i>قدرت</i></div>
+    </div>
+
+    <main id="pages" class="pages">
+      <!-- ===== تب خانه ===== -->
+      <div class="page active" data-page="home">
+        <div class="home-hero">
+          <div class="hero-glow"></div>
+          <div class="class-card">
+            <div class="class-badge" id="home-class">شکارچی E</div>
+            <div class="class-level"><b id="home-level">1</b><span>سطح</span></div>
+            <div class="class-title" id="home-title">مبتدی</div>
+          </div>
+          <div class="train-zone">
+            <button id="btn-train" class="train-btn">
+              <svg viewBox="0 0 24 24"><path d="M6.92 5H5l9 9 1-.94-8.08-8.06zM18.5 4h-3l-1 1h2.5l-6.5 6.5 1 1L19 5.5V8l1-1V4h-1.5zM6 8H4.5v1H6V8zm-2 2H2.5v1H4V10zm4-4H7v1h1V6zm-2 4H4.5v1H6v-1zm0-2H4.5v1H6V8z" transform="scale(1.1) translate(-2,-1)"/></svg>
+              <span>تمرین کن!</span>
+              <i id="train-combo"></i>
+            </button>
+            <div class="train-stats">
+              <span>کلیک امروز: <b id="today-clicks">0</b></span>
+              <span>بهترین کمبو: <b id="best-combo">0</b></span>
+            </div>
+            <div class="dmg-pop-zone" id="dmg-zone"></div>
+          </div>
+        </div>
+
+        <div id="sys-window" class="sys-window hidden">
+          <div class="sys-window-head"><span class="sys-title">سیستم</span><button class="sys-close" id="sys-close">✕</button></div>
+          <div class="sys-window-body" id="sys-window-body"></div>
+        </div>
+
+        <div class="card" id="daily-quests-card">
+          <div class="card-head"><h3>ماموریت‌های روزانه اجباری</h3><span class="chip chip-red">اگر انجام نشود: مجازات!</span></div>
+          <div class="card-body" id="daily-quests"></div>
+        </div>
+
+        <div class="card" id="year-quest-card">
+          <div class="card-head"><h3>مسیر یک‌ساله (۳۶۵ روز)</h3><span class="chip chip-purple" id="year-day-chip">روز ۱</span></div>
+          <div class="card-body" id="year-quest"></div>
+        </div>
+
+        <div class="card" id="reward-pick-card">
+          <div class="card-head"><h3>جایزهٔ لِوِل‌آپ</h3><span class="chip chip-gold" id="reward-token-chip">۳ انتخاب مانده</span></div>
+          <div class="card-body" id="reward-picks"></div>
+        </div>
+
+        <div class="card" id="punish-card">
+          <div class="card-head"><h3>سابقهٔ مجازات‌ها</h3><span class="chip chip-red" id="punish-count-chip">۰ مجازات</span></div>
+          <div class="card-body" id="punish-list"></div>
+        </div>
+      </div>
+
+      <!-- ===== تب ماموریت ===== -->
+      <div class="page" data-page="missions">
+        <div class="page-head"><h2>ماموریت‌ها</h2><p id="mission-timer">ماموریت جدید تا <b>۰۱:۳۰:۰۰</b></p></div>
+        <div class="mission-tabs"><button class="m-tab active" data-mtab="active">فعال</button><button class="m-tab" data-mtab="done">انجام‌شده</button></div>
+        <div class="list" id="mission-list"></div>
+      </div>
+
+      <!-- ===== تب دروازه ===== -->
+      <div class="page" data-page="gates">
+        <div class="page-head"><h2>دروازه‌ها (دانجن)</h2><p>۱۰٬۰۰۰ دانجن واقعی — از E تا پادشاه سایه‌ها</p></div>
+        <div class="gate-filters" id="gate-filters"></div>
+        <div class="list" id="gate-list"></div>
+        <div class="load-more-wrap"><button class="btn btn-ghost hidden" id="gates-more">نمایش بیشتر</button></div>
+      </div>
+
+      <!-- ===== تب نبرد (باس‌ها) ===== -->
+      <div class="page" data-page="battle">
+        <div class="page-head"><h2>نبرد با باس‌ها</h2><p>۱٬۰۰۰ باس — هر باس به تو آسیب می‌زند!</p></div>
+        <div class="battle-filters" id="battle-filters"></div>
+        <div class="list" id="boss-list"></div>
+        <div class="load-more-wrap"><button class="btn btn-ghost hidden" id="bosses-more">نمایش بیشتر</button></div>
+      </div>
+
+      <!-- ===== تب فروشگاه ===== -->
+      <div class="page" data-page="shop">
+        <div class="page-head"><h2>فروشگاه سیستم</h2><p id="shop-refresh">تخفیف روزانه: تا <b>—</b></p></div>
+        <div class="shop-tabs" id="shop-tabs"></div>
+        <div class="deal-strip" id="deal-strip"></div>
+        <div class="shop-grid" id="shop-grid"></div>
+      </div>
+
+      <!-- ===== تب کیف ===== -->
+      <div class="page" data-page="bag">
+        <div class="page-head"><h2>کیف / موجودی</h2><p>مهارت‌ها را فعال/غیرفعال کن — همه‌چیز ابری ذخیره می‌شود</p></div>
+        <div class="bag-tabs" id="bag-tabs"></div>
+        <div class="bag-body" id="bag-body"></div>
+      </div>
+
+      <!-- ===== تب رقابت ===== -->
+      <div class="page" data-page="duel">
+        <div class="page-head"><h2>رقابت آنلاین</h2><p>با حریفان واقعی — هیچ رباتی وجود ندارد</p></div>
+        <div class="duel-actions">
+          <button class="btn btn-primary" id="btn-queue">یافتن حریف (مسابقه سریع)</button>
+          <span class="chip chip-blue" id="queue-status">آمادهٔ مبارزه</span>
+        </div>
+        <div class="card"><div class="card-head"><h3>بازیکنان آنلاین</h3><span class="chip chip-green" id="online-count">۰ آنلاین</span></div>
+        <div class="list" id="online-list"></div></div>
+        <div class="card"><div class="card-head"><h3>مسابقات باز</h3></div>
+        <div class="list" id="open-duels"></div></div>
+        <div class="card"><div class="card-head"><h3>سابقهٔ مبارزات من</h3></div>
+        <div class="list" id="duel-history"></div></div>
+      </div>
+
+      <!-- ===== تب چت ===== -->
+      <div class="page" data-page="chat">
+        <div class="chat-layout">
+          <aside class="chat-rooms" id="chat-rooms">
+            <button class="room-btn active" data-room="عمومی">عمومی</button>
+            <button class="room-btn" data-room="رقابت">رقابت</button>
+            <button class="room-btn" data-room="دروازه‌ها">دروازه‌ها</button>
+            <div id="chat-groups"></div>
+            <button class="btn btn-ghost btn-sm" id="btn-new-group">+ ساخت گروه</button>
+          </aside>
+          <section class="chat-main">
+            <div class="chat-head"><h3 id="chat-room-title">عمومی</h3><div class="chat-head-actions">
+              <button class="icon-btn" id="btn-voice-push" title="صحبت زنده (نگه دار)"><svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z"/></svg></button>
+              <span class="chip chip-green hidden" id="voice-live">صحبت زنده...</span>
+            </div></div>
+            <div class="chat-msgs" id="chat-msgs"></div>
+            <div class="chat-input">
+              <button class="icon-btn" id="btn-voice-msg" title="پیام صوتی">🎤</button>
+              <input id="chat-text" type="text" placeholder="پیامت را بنویس..." maxlength="500">
+              <button class="icon-btn" id="btn-emoji">😀</button>
+              <button class="btn btn-primary btn-sm" id="btn-send">ارسال</button>
+            </div>
+            <div class="emoji-panel hidden" id="emoji-panel"></div>
+          </section>
+        </div>
+      </div>
+
+      <!-- ===== تب رنک ===== -->
+      <div class="page" data-page="ranks">
+        <div class="page-head"><h2>لیدربرد جهانی</h2><p>رنک همهٔ کاربران ثبت‌شده — بر اساس قدرت</p></div>
+        <div class="rank-tabs" id="rank-tabs"></div>
+        <div class="my-rank-card" id="my-rank-card"></div>
+        <div class="list" id="rank-list"></div>
+      </div>
+    </main>
+
+    <nav class="bottomnav" id="bottomnav">
+      <button class="nav-btn active" data-page="home"><span class="nav-ico home"></span><span class="nav-lbl">خانه</span></button>
+      <button class="nav-btn" data-page="missions"><span class="nav-ico quest"></span><span class="nav-lbl">ماموریت</span></button>
+      <button class="nav-btn" data-page="gates"><span class="nav-ico gate"></span><span class="nav-lbl">دروازه</span></button>
+      <button class="nav-btn" data-page="battle"><span class="nav-ico boss"></span><span class="nav-lbl">نبرد</span></button>
+      <button class="nav-btn" data-page="shop"><span class="nav-ico shop"></span><span class="nav-lbl">فروشگاه</span></button>
+      <button class="nav-btn" data-page="bag"><span class="nav-ico bag"></span><span class="nav-lbl">کیف</span></button>
+      <button class="nav-btn" data-page="duel"><span class="nav-ico duel"></span><span class="nav-lbl">رقابت</span></button>
+      <button class="nav-btn" data-page="chat"><span class="nav-ico chat"></span><span class="nav-lbl">چت</span></button>
+      <button class="nav-btn" data-page="ranks"><span class="nav-ico trophy"></span><span class="nav-lbl">رنک</span></button>
+    </nav>
+  </section>
+
+  <!-- ============ صفحهٔ مبارزه (باس / دانجن) ============ -->
+  <section id="screen-fight" class="screen screen-fight hidden">
+    <div class="fight-top">
+      <button class="btn btn-ghost btn-sm" id="btn-flee">فرار</button>
+      <div class="fight-title" id="fight-title">نبرد</div>
+      <div class="fight-wave" id="fight-wave"></div>
+    </div>
+    <div class="fight-arena" id="fight-arena">
+      <div class="fight-enemy" id="fight-enemy">
+        <div class="enemy-sprite" id="enemy-sprite"></div>
+        <div class="enemy-name" id="enemy-name">—</div>
+        <div class="bar hp-bar enemy"><div class="bar-fill" id="enemy-hp-fill"></div><b id="enemy-hp-txt"></b></div>
+        <div class="enemy-rage hidden" id="enemy-rage">حالت خشم!</div>
+        <div class="float-dmg" id="enemy-dmg"></div>
+      </div>
+      <div class="fight-player" id="fight-player">
+        <div class="player-sprite" id="player-sprite"></div>
+        <div class="player-name" id="player-name">تو</div>
+        <div class="bar hp-bar player"><div class="bar-fill" id="player-hp-fill"></div><b id="player-hp-txt"></b></div>
+        <div class="bar mp-bar"><div class="bar-fill" id="player-mp-fill"></div></div>
+        <div class="float-dmg" id="player-dmg"></div>
+      </div>
+      <div class="shadow-squad" id="shadow-squad"></div>
+    </div>
+    <div class="fight-log" id="fight-log"></div>
+    <div class="fight-actions" id="fight-actions"></div>
+  </section>
+
+  <!-- ============ صفحهٔ دوئل دو بعدی ============ -->
+  <section id="screen-shooter" class="screen screen-shooter hidden">
+    <div class="shooter-top">
+      <button class="btn btn-ghost btn-sm" id="btn-exit-duel">خروج</button>
+      <div class="shooter-info"><b id="shooter-vs">تو در برابر —</b><span id="shooter-time">۶۰</span></div>
+    </div>
+    <canvas id="duel-canvas" class="duel-canvas"></canvas>
+    <div class="shooter-controls">
+      <div class="joystick-zone" id="joystick-zone"><div class="joystick-knob" id="joystick-knob"></div></div>
+      <button class="btn fire-btn" id="btn-fire">آتش 🔥</button>
+    </div>
+    <div class="shooter-hp">
+      <div class="bar hp-bar player"><div class="bar-fill" id="d-hp-fill"></div><b id="d-hp-txt"></b></div>
+      <div class="bar hp-bar enemy"><div class="bar-fill" id="d-ehp-fill"></div><b id="d-ehp-txt"></b></div>
+    </div>
+  </section>
+
+  <!-- ============ مودال‌ها ============ -->
+  <div class="modal-wrap hidden" id="modal-wrap"><div class="modal" id="modal"></div></div>
+  <div class="toasts" id="toasts"></div>
+  <div class="confetti-layer" id="confetti"></div>
+</div>
+<script id="app-js"></script>
+</body>
+</html>
