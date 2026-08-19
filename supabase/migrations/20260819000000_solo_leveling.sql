@@ -441,6 +441,80 @@ as $$
   select exists (select 1 from pg_tables where schemaname = 'public' and tablename = 'accounts');
 $$;
 
+-- ذخیرهٔ کامل وضعیت (مهارت، سایه، آیتم، آمار، ماموریت — بدون سقف ستون)
+create or replace function public.save_full_state(p_data jsonb)
+returns json language plpgsql security definer set search_path = public as $$
+declare
+  v_user uuid := public.current_user_id();
+  v_lvl int;
+  v_xp bigint;
+  v_gold bigint;
+  v_gems int;
+  v_power bigint;
+  v_wins int;
+  v_losses int;
+  v_kills bigint;
+  v_rank bigint;
+  v_class text;
+  v_name text;
+begin
+  if v_user is null then
+    return json_build_object('error', 'ابتدا وارد شوید');
+  end if;
+  if p_data is null or jsonb_typeof(p_data) <> 'object' then
+    return json_build_object('error', 'داده نامعتبر است');
+  end if;
+  v_lvl := greatest(1, coalesce(nullif(p_data->>'level','')::int, 1));
+  v_xp := greatest(0, coalesce(nullif(p_data->>'xp','')::bigint, 0));
+  v_gold := greatest(0, coalesce(nullif(p_data->>'gold','')::bigint, 0));
+  v_gems := greatest(0, coalesce(nullif(p_data->>'gems','')::int, 0));
+  v_power := greatest(0, coalesce(nullif(p_data->>'power','')::bigint, 0));
+  v_wins := greatest(0, coalesce(nullif((p_data->'stats'->>'wins'),'')::int, 0));
+  v_losses := greatest(0, coalesce(nullif((p_data->'stats'->>'losses'),'')::int, 0));
+  v_kills := greatest(0, coalesce(nullif((p_data->'stats'->>'kills'),'')::bigint, 0));
+  v_rank := greatest(0, coalesce(nullif(p_data->>'rank_pts','')::bigint, 1000));
+  v_class := coalesce(p_data->>'hunterClass', 'E');
+  select username into v_name from public.players where user_id = v_user;
+  update public.players set
+    data = p_data,
+    level = v_lvl,
+    xp = v_xp,
+    gold = v_gold,
+    gems = v_gems,
+    power = case when v_power > 0 then v_power else power end,
+    wins = v_wins,
+    losses = v_losses,
+    kills = v_kills,
+    rank_pts = v_rank,
+    hunter_class = v_class,
+    updated_at = now(),
+    last_seen = now()
+  where user_id = v_user;
+  if not found then
+    insert into public.players (user_id, username, level, xp, gold, gems, power, wins, losses, kills, rank_pts, hunter_class, data)
+    values (v_user, coalesce(v_name, p_data->>'username', 'hunter'), v_lvl, v_xp, v_gold, v_gems, v_power, v_wins, v_losses, v_kills, v_rank, v_class, p_data);
+  end if;
+  return json_build_object('ok', true, 'updated_at', now());
+end;
+$$;
+
+create or replace function public.load_full_state()
+returns json language plpgsql security definer set search_path = public as $$
+declare
+  v_user uuid := public.current_user_id();
+  v_row public.players%rowtype;
+begin
+  if v_user is null then
+    return json_build_object('error', 'ابتدا وارد شوید');
+  end if;
+  select * into v_row from public.players where user_id = v_user;
+  if not found then
+    return json_build_object('player', null);
+  end if;
+  return json_build_object('player', row_to_json(v_row));
+end;
+$$;
+
 -- ============================================================
 --  Grants
 -- ============================================================
