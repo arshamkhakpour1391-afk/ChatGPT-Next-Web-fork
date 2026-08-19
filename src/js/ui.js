@@ -12,6 +12,8 @@ import {
   applyPunishment, activeDebuffs, tickState, yearState, claimYearDay, currentPicks, takePick,
   missionBucket, dailyDeals, addRankPts, activeBuffs,
   autoEquipBest, claimAllReady, dailyFeatured, achievementsOf,
+  spendStat, upgradeShadow, fuseShadows, sweepDungeon, markFailedMission,
+  featuredMult, firstClearMult, codexStats, energyCap, migrateState,
 } from "./engine.js";
 import {
   dungeonIndex, bossIndex, skillIndex, DUNGEON_COUNT, BOSS_COUNT, SKILL_COUNT,
@@ -148,7 +150,7 @@ export function renderTopbar() {
   $("hunter-rank").style.color = rankOfLevel(st.level).color;
   $("res-gold").textContent = fmtNum(st.gold);
   $("res-gems").textContent = faNum(st.gems);
-  $("res-energy").textContent = `${faNum(st.energy)}/${faNum(maxEnergy(st.level))}`;
+  $("res-energy").textContent = `${faNum(st.energy)}/${faNum(energyCap(st))}`;
   const need = xpNeed(st.level);
   $("xp-label").textContent = `سطح ${faNum(st.level)}`;
   $("xp-nums").textContent = `${fmtNum(st.xp)} / ${fmtNum(need)}`;
@@ -193,7 +195,8 @@ function bindTrain() {
       levelUpCelebrate(evt.levelUps);
       sysWindow(`<div class="sys-row"><span>سطح جدید</span><b>سطح ${faNum(st.level)}</b></div>
         <div class="sys-row"><span>قدرت</span><b>${fmtNum(computePower(st))}</b></div>
-        <p style="margin-top:8px">تو قوی‌تر شدی. سیستم یک انتخاب جایزه به تو داد.</p>`, "gold");
+        <div class="sys-row"><span>امتیاز آمار</span><b>+${faNum(evt.levelUps)}</b></div>
+        <p style="margin-top:8px">تو قوی‌تر شدی. جایزه بگیر و در کیف امتیاز آمار خرج کن.</p>`, "gold");
     }
     applyProgress(st, "clicks", 1);
     app.save();
@@ -435,9 +438,8 @@ export function renderMissions() {
     const showInDone = rec.done || rec.claimed || rec.failed;
     if (isDoneTab && !showInDone) return;
     if (!isDoneTab && rec.claimed) return;
-    if (m.failDeadline && !rec.done && !rec.claimed) {
-      // ماموریت اجباری از دست رفته → مجازات (فقط یک بار)
-      rec.failed = true;
+    if (m.failDeadline && !rec.done && !rec.claimed && !rec.failed) {
+      if (!markFailedMission(st, m.id)) return;
       const ev = applyPunishment(st, `ماموریت اجباری انجام نشد: ${m.title}`, {});
       app.save();
       showPunishmentModal(ev, m.title);
@@ -518,7 +520,7 @@ export function renderGates() {
       const b = make(`<button class="g-filter ${f === gateFilter ? "active" : ""}" data-gf="${f}">${f === "all" ? "همه" : f}</button>`);
       b.addEventListener("click", () => {
         gateFilter = f; gateShown = 30;
-        document.querySelectorAll(".g-filter").forEach((x) => x.classList.toggle("active", x === b));
+        document.querySelectorAll("#gate-filters .g-filter").forEach((x) => x.classList.toggle("active", x === b));
         renderGates();
       });
       $("gate-filters").appendChild(b);
@@ -558,9 +560,18 @@ export function renderGates() {
         <div class="gate-sub">${esc(d.monster)} · ${faNum(d.waves)} موج · قدرت دشمن ${fmtNum(d.enemyPower)}</div>
         <div class="gate-rew">🏆 ${fmtNum(d.gold)} طلا · ${fmtNum(d.xp)} XP · شانس سایه ${faNum(Math.floor(d.essenceChance * 100))}٪</div>
       </div>
-      <button class="btn ${locked ? "btn-ghost" : "btn-primary"} btn-sm gate-go" data-g="${i}" ${locked ? "" : ""}>${locked ? `سطح ${faNum(d.level)} لازم است` : cleared ? "دوباره" : "ورود"}</button>
+      <div style="display:flex;flex-direction:column;gap:4px">
+      <button class="btn ${locked ? "btn-ghost" : "btn-primary"} btn-sm gate-go" data-g="${i}">${locked ? `سطح ${faNum(d.level)} لازم است` : cleared ? "دوباره" : "ورود"}</button>
+      ${cleared && !locked ? `<button class="btn btn-ghost btn-sm" data-sw="${i}">جارو</button>` : ""}
+      </div>
     </div>`);
     card.querySelector(".gate-go").addEventListener("click", () => enterDungeon(i, d));
+    card.querySelector("[data-sw]")?.addEventListener("click", () => {
+      const r = sweepDungeon(app.getSt(), i);
+      if (r.error) return toast(r.error, "bad");
+      toast(`جارو شد! +${fmtNum(r.gold)} طلا · +${fmtNum(r.xp)} XP`, "gold");
+      sfx.coin(); app.save(); renderTopbar(); renderGates();
+    });
     box.appendChild(card);
   }
   $("gates-more").classList.toggle("hidden", shown < gateShown);
@@ -578,18 +589,23 @@ function enterDungeon(i, d) {
   applyProgress(st, "energy", energyCost);
   app.save();
   const src = dungeonIndex(i);
+  if (d.level >= st.level) applyProgress(st, "gates", 1);
+  const rewardMult = featuredMult(st, "dungeon", i) * firstClearMult(st, "dungeon", i);
   openBattle({
-    mode: "dungeon", src, st,
+    mode: "dungeon", src, st, rewardMult,
+    toast,
     save: () => app.save(),
     consumeItem: (id, n) => consumeItem(st, id, n),
     applyProgress: (t, n) => applyProgress(st, t, n),
+    onSkillUsed: () => applyProgress(st, "skills", 1),
     onWin: (rewards) => {
       gainGold(st, rewards.gold);
       addXP(st, rewards.xp);
       st.dungeons = st.dungeons || {};
       st.dungeons[i] = { cleared: true, count: (st.dungeons[i]?.count || 0) + 1, last: nowMs() };
       app.save();
-      toast(`دانجن پاک شد! +${fmtNum(rewards.gold)} طلا، +${fmtNum(rewards.xp)} XP`, "good", 3400);
+      const extra = rewardMult > 1.01 ? " (جایزهٔ ویژه)" : "";
+      toast(`دانجن پاک شد! +${fmtNum(rewards.gold)} طلا، +${fmtNum(rewards.xp)} XP${extra}`, "good", 3400);
       if (rewards.essenceChance > 0.02) maybeArise({ name: "سایهٔ " + src.monster, rankKey: src.rank.key, power: src.bossPower, emoji: src.bossEmoji, baseChance: rewards.essenceChance });
       renderTopbar();
       if (currentPage === "gates") renderGates();
@@ -613,7 +629,7 @@ export function renderBosses() {
       const b = make(`<button class="g-filter ${f === bossFilter ? "active" : ""}" data-bf="${f}">${f === "all" ? "همه" : f}</button>`);
       b.addEventListener("click", () => {
         bossFilter = f; bossShown = 30;
-        document.querySelectorAll(".g-filter").forEach((x) => x.classList.toggle("active", x === b));
+        document.querySelectorAll("#battle-filters .g-filter").forEach((x) => x.classList.toggle("active", x === b));
         renderBosses();
       });
       $("battle-filters").appendChild(b);
@@ -671,11 +687,13 @@ function fightBoss(i, b) {
   applyProgress(st, "energy", energyCost);
   app.save();
   const src = bossIndex(i);
+  const rewardMult = featuredMult(st, "boss", i) * firstClearMult(st, "boss", i);
   openBattle({
-    mode: "boss", src, st,
+    mode: "boss", src, st, rewardMult, toast,
     save: () => app.save(),
     consumeItem: (id, n) => consumeItem(st, id, n),
     applyProgress: (t, n) => applyProgress(st, t, n),
+    onSkillUsed: () => applyProgress(st, "skills", 1),
     onWin: (rewards) => {
       gainGold(st, rewards.gold);
       addXP(st, rewards.xp);
@@ -912,7 +930,7 @@ function renderItems(box) {
     const equippedA = st.equip.armor === it.id;
     const equippedT = st.equip.titleItem === it.id;
     const fx = it.effects;
-    const usable = fx.energy != null || fx.xp != null || fx.gold != null || fx.protect != null || fx.box != null || fx.rerollShop != null || fx.punishShield != null || fx.fullEnergy != null || fx.duelTicket != null || fx.rage != null || fx.haste != null || fx.focus != null || fx.luck != null || fx.def != null || fx.atk != null || fx.vamp != null || fx.regen != null || fx.greed != null || fx.shadow != null || fx.yearBoost != null || fx.chatColor != null || fx.sysBell != null || fx.secretKey != null;
+    const usable = fx.energy != null || fx.xp != null || fx.gold != null || fx.protect != null || fx.box != null || fx.rerollShop != null || fx.punishShield != null || fx.fullEnergy != null || fx.duelTicket != null || fx.rage != null || fx.haste != null || fx.focus != null || fx.luck != null || fx.def != null || fx.atk != null || fx.vamp != null || fx.regen != null || fx.greed != null || fx.shadow != null || fx.yearBoost != null || fx.chatColor != null || fx.sysBell != null || fx.secretKey != null || fx.statPts != null || fx.shadowFood != null;
     const row = make(`<div class="inv-item">
       <div class="item-ico">${it.icon}</div>
       <div class="skill-info">
@@ -949,6 +967,7 @@ function renderItems(box) {
       app.save(); renderTopbar(); renderBag();
     });
     row.querySelector("[data-sell]")?.addEventListener("click", () => {
+      if (!window.confirm(`«${it.name}» فروخته شود؟`)) return;
       const r = sellItem(app.getSt(), it.id, 1);
       if (r.error) return toast(r.error, "bad");
       toast("فروخته شد", "info"); sfx.coin();
@@ -963,17 +982,21 @@ function renderShadows(box) {
   box.className = "bag-sec";
   const entries = Object.values(st.shadows || {});
   const active = st.equip.shadows;
-  box.innerHTML = `<div class="chip chip-purple" style="margin-bottom:2px">${faNum(active.length)}/۳ سایهٔ همراه — سایه‌ها قدرت و جان تو را زیاد می‌کنند</div>`;
+  box.innerHTML = `<div class="chip chip-purple" style="margin-bottom:2px">${faNum(active.length)}/۳ سایهٔ همراه — ارتقا و ترکیب قدرت می‌دهد</div>`;
   if (!entries.length) { box.innerHTML += "<p>هنوز سایه‌ای نداری. باس‌ها را بکش و با «برخاستن!» روحشان را بگیر.</p>"; return; }
   entries.forEach((sh) => {
     const on = active.includes(sh.id);
+    const lv = sh.lv || 1;
     const card = make(`<div class="shadow-card ${on ? "assigned" : ""}">
       <div class="item-ico" style="font-size:22px">${sh.emoji}</div>
       <div class="skill-info">
-        <div class="skill-name">${esc(sh.name)}</div>
+        <div class="skill-name">${esc(sh.name)} <span class="chip chip-blue">Lv ${faNum(lv)}</span></div>
         <div class="skill-desc">قدرت: ${fmtNum(sh.power)} · رتبهٔ ${esc(sh.rank)} · ${timeAgo(sh.created)}</div>
       </div>
-      <button class="btn ${on ? "btn-ghost" : "btn-green"} btn-sm" data-sh="${sh.id}">${on ? "برگردان" : "همراه کن"}</button>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <button class="btn ${on ? "btn-ghost" : "btn-green"} btn-sm" data-sh="${sh.id}">${on ? "برگردان" : "همراه کن"}</button>
+        <button class="btn btn-gold btn-sm" data-up="${sh.id}">ارتقاء</button>
+      </div>
     </div>`);
     card.querySelector("[data-sh]").addEventListener("click", () => {
       const r = assignShadow(app.getSt(), sh.id, !on);
@@ -981,8 +1004,26 @@ function renderShadows(box) {
       toast(on ? "سایه برگشت" : "سایه همراهت شد", "good"); sfx.arise();
       app.save(); renderTopbar(); renderBag();
     });
+    card.querySelector("[data-up]").addEventListener("click", () => {
+      const r = upgradeShadow(app.getSt(), sh.id);
+      if (r.error) return toast(r.error, "bad");
+      toast(`سایه سطح ${faNum(r.sh.lv)} شد (+قدرت)`, "gold");
+      sfx.levelup(); app.save(); renderTopbar(); renderBag();
+    });
     box.appendChild(card);
   });
+  if (entries.length >= 2) {
+    const fuseBtn = make(`<button class="btn btn-primary btn-sm" style="margin-top:6px">ترکیب دو سایه (ضعیف در قوی حل می‌شود)</button>`);
+    fuseBtn.addEventListener("click", () => {
+      const list = Object.values(app.getSt().shadows || {}).sort((a, b) => b.power - a.power);
+      if (list.length < 2) return toast("حداقل دو سایه لازم است", "bad");
+      const r = fuseShadows(app.getSt(), list[0].id, list[list.length - 1].id);
+      if (r.error) return toast(r.error, "bad");
+      toast(`ترکیب شد! قدرت جدید ${fmtNum(r.sh.power)}`, "gold");
+      sfx.arise(); app.save(); renderTopbar(); renderBag();
+    });
+    box.appendChild(fuseBtn);
+  }
 }
 
 function renderGear(box) {
@@ -1275,18 +1316,24 @@ let recording = null;
 let recorder = null;
 let voicePushActive = false;
 
+const roomsHooked = new Set();
 export function renderChat() {
   $("chat-room-title").textContent = chatRoom;
   document.querySelectorAll(".room-btn").forEach((b) => b.classList.toggle("active", b.dataset.room === chatRoom));
   loadChatHistory();
   cloud.subscribeRoom(chatRoom);
-  cloud.onRoomBroadcast(chatRoom, (msg) => {
-    if (msg.local || msg.userId === app.myUserId()) return;
-    appendChatMsg(msg);
-    sfx.msg();
-    notifyLocal("پیام جدید", `${msg.username}: ${(msg.body || "").slice(0, 60)}`);
-  });
-  cloud.onVoiceBroadcast(chatRoom, (v) => handleVoiceChunk(v));
+  if (!roomsHooked.has(chatRoom)) {
+    roomsHooked.add(chatRoom);
+    const room = chatRoom;
+    cloud.onRoomBroadcast(room, (msg) => {
+      if (chatRoom !== room) return;
+      if (msg.local || msg.userId === app.myUserId()) return;
+      appendChatMsg(msg);
+      sfx.msg();
+      notifyLocal("پیام جدید", `${msg.username}: ${(msg.body || "").slice(0, 60)}`);
+    });
+    cloud.onVoiceBroadcast(room, (v) => { if (chatRoom === room) handleVoiceChunk(v); });
+  }
   refreshGroups();
 }
 function loadChatHistory() {
@@ -1542,10 +1589,11 @@ $("btn-settings").addEventListener("click", () => {
     title: "تنظیمات",
     body: `
       <div class="m-meta" style="justify-content:space-between"><span>وضعیت ابر: <b>${cloudState}</b></span><span>دیتابیس: <b>${cloud.schemaReady() ? "✅ نصب شده" : "❌ نصب نشده"}</b></span></div>
-      <div class="m-meta" style="justify-content:space-between"><span>حساب: <b>${esc(st.username)}</b></span><span>Solo System ۲.۲</span></div>
+      <div class="m-meta" style="justify-content:space-between"><span>حساب: <b>${esc(st.username)}</b></span><span>Solo System ۲.۳</span></div>
       <p style="margin-top:10px">ساختهٔ ارشام — داده‌ها روی ابر و دستگاه می‌مانند.</p>
       <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px">
         <button class="btn btn-ghost btn-sm" id="set-sound">${isMuted() ? "🔊 روشن کردن صدا" : "🔇 خاموش کردن صدا"}</button>
+        <button class="btn btn-ghost btn-sm" id="set-autop">${st.settings?.autoPotion ? "🧪 معجون خودکار: روشن" : "🧪 معجون خودکار: خاموش"}</button>
         <button class="btn btn-ghost btn-sm" id="set-export">خروجی پشتیبان ذخیره</button>
         <button class="btn btn-ghost btn-sm" id="set-import">بازیابی از پشتیبان</button>
         <button class="btn btn-ghost btn-sm" id="set-install">نصب / بررسی دیتابیس ابری</button>
@@ -1555,6 +1603,13 @@ $("btn-settings").addEventListener("click", () => {
     actions: [{ label: "بستن", cb() {} }]
   });
   $("set-sound").onclick = () => { setMuted(!isMuted()); toast(isMuted() ? "صدا خاموش شد" : "صدا روشن شد", "info"); closeModal(); };
+  $("set-autop").onclick = () => {
+    st.settings = st.settings || {};
+    st.settings.autoPotion = !st.settings.autoPotion;
+    app.save();
+    toast(st.settings.autoPotion ? "معجون خودکار روشن شد" : "معجون خودکار خاموش شد", "info");
+    closeModal();
+  };
   $("set-export").onclick = () => {
     try {
       const blob = new Blob([JSON.stringify(st)], { type: "application/json" });
@@ -1576,7 +1631,7 @@ $("btn-settings").addEventListener("click", () => {
         try {
           const data = JSON.parse(r.result);
           if (!data || typeof data.level !== "number") throw new Error("bad");
-          Object.assign(app.getSt(), data);
+          Object.assign(app.getSt(), migrateState(data));
           app.saveNow();
           toast("ذخیره بازیابی شد", "good");
           closeModal();

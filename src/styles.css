@@ -377,6 +377,18 @@ input{font-family:inherit}
 .float-dmg span.dmg-crit{font-size:22px;color:var(--gold)}
 .float-dmg span.dmg-heal{color:var(--green)}
 @keyframes dmgFloat{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-46px)}}
+.fight-hud{display:flex;flex-direction:column;align-items:center;gap:5px;padding:0 14px 4px}
+.fight-combo{min-height:18px;font-size:14px;font-weight:900;color:var(--gold);text-shadow:0 0 10px rgba(255,201,60,.6)}
+.fight-combo.hot{color:#ff2d55;font-size:16px;animation:blink .6s infinite}
+.ult-bar{position:relative;width:min(78vw,300px);height:11px;border-radius:8px;background:rgba(155,48,255,.15);overflow:hidden;border:1px solid rgba(155,48,255,.35)}
+.ult-bar .bar-fill{background:linear-gradient(90deg,#7c5cff,#ff2d9b);height:100%}
+.ult-bar b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:8.5px;z-index:2;color:#e8d8ff}
+.fight-status{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;min-height:16px}
+.st-chip{font-size:9px;font-weight:800;padding:2px 6px;border-radius:8px;background:rgba(255,255,255,.07);border:1px solid var(--card-border)}
+.enemy-telegraph{position:absolute;top:-6px;left:50%;transform:translateX(-50%);width:34px;height:34px;border-radius:50%;background:#ff2d55;color:#fff;font-weight:900;font-size:20px;display:flex;align-items:center;justify-content:center;z-index:6;animation:blink .35s infinite;box-shadow:0 0 18px rgba(255,45,85,.8)}
+.fa-btn.fa-ult.ready{background:linear-gradient(160deg,rgba(155,48,255,.5),rgba(255,45,155,.35));border-color:rgba(255,45,155,.7);box-shadow:0 0 16px rgba(155,48,255,.5)}
+.quick-row{display:flex;gap:6px;padding:0 10px;overflow-x:auto}
+.quick-row .btn{flex:none}
 .shadow-squad{position:absolute;bottom:96px;right:8px;display:flex;gap:5px}
 .shadow-mini{width:30px;height:30px;border-radius:9px;background:rgba(155,48,255,.25);border:1px solid rgba(155,48,255,.55);display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 0 10px rgba(155,48,255,.4);animation:squadJump 1.2s ease-in-out infinite}
 @keyframes squadJump{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}

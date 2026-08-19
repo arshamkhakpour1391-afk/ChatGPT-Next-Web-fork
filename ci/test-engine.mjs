@@ -7,7 +7,8 @@ import {
   assignShadow, extractShadow, activeMissions, applyProgress, claimMission,
   dailyQuests, claimDailyQuest, applyPunishment, activeDebuffs, tickState, yearState,
   claimYearDay, currentPicks, takePick, addRewardPick, missionBucket, calcDamage, newShadow, dailyDeals,
-  claimDailyLogin, unlockTitles, addRankPts, regenEnergy, addBuff, activeBuffs, autoEquipBest, claimAllReady, dailyFeatured, achievementsOf
+  claimDailyLogin, unlockTitles, addRankPts, regenEnergy, addBuff, activeBuffs, autoEquipBest, claimAllReady, dailyFeatured, achievementsOf,
+  spendStat, upgradeShadow, fuseShadows, sweepDungeon, markFailedMission, comboMult, battleAtkCd, energyCap, migrateState, featuredMult, firstClearMult
 } from "../src/js/engine.js";
 import {
   dungeonIndex, bossIndex, skillIndex, DUNGEON_COUNT, BOSS_COUNT, SKILL_COUNT,
@@ -284,6 +285,39 @@ t("تجهیز خودکار و دستاورد و هدف روزانه", () => {
   assert.ok(achievementsOf(st).length >= 5);
   const f = dailyFeatured();
   assert.ok(f.dungeon >= 0 && f.boss >= 0);
+});
+
+t("امتیاز آمار و ارتقای سایه و جارو", () => {
+  const st = newState("t", "s");
+  st.statPts = 3;
+  const p0 = computePower(st);
+  assert.ok(spendStat(st, "atk").ok);
+  assert.ok(computePower(st) > p0);
+  assert.equal(st.statPts, 2);
+  assert.ok(spendStat(st, "nope").error);
+  const id = Object.keys((() => { extractShadow(st, { name: "x", rankKey: "S", power: 200, emoji: "💀", baseChance: 1.1 }); return st.shadows; })())[0];
+  st.gold = 1e9;
+  const u = upgradeShadow(st, id);
+  assert.ok(u.ok && u.sh.lv === 2);
+  extractShadow(st, { name: "y", rankKey: "E", power: 50, emoji: "👤", baseChance: 1.1 });
+  const ids = Object.keys(st.shadows);
+  const f = fuseShadows(st, ids[0], ids[1]);
+  assert.ok(f.ok && !st.shadows[ids[1]]);
+  st.dungeons[0] = { cleared: true, count: 1 };
+  st.energy = 20;
+  const sw = sweepDungeon(st, 0);
+  assert.ok(sw.ok && sw.gold > 0);
+  assert.ok(markFailedMission(st, "9:0"));
+  assert.ok(!markFailedMission(st, "9:0"));
+  assert.ok(comboMult(10) > 1.3);
+  assert.ok(battleAtkCd({ haste: 2 }) < battleAtkCd({ haste: 1 }));
+  assert.ok(energyCap(st) >= maxEnergy(st.level));
+  const m = migrateState({ level: 2, gold: 10 });
+  assert.equal(m.v, 4);
+  assert.ok(m.settings);
+  assert.ok(firstClearMult(st, "dungeon", 99) > 1);
+  assert.ok(featuredMult(st, "dungeon", -1) === 1);
+  assert.ok(achievementsOf(st).length >= 12);
 });
 
 console.log(`\n=== نتیجه: ${passed} موفق، ${failed} ناموفق ===`);

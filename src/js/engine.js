@@ -8,7 +8,32 @@ import {
   yearQuestDay, dailyPicks, randomTitle, randomWeapon, YEAR_DAYS, TITLES
 } from "./data.js";
 
-export const STATE_VERSION = 3;
+export const STATE_VERSION = 4;
+
+export function migrateState(st) {
+  if (!st || typeof st !== "object") return st;
+  st.v = STATE_VERSION;
+  if (st.gold == null) st.gold = 0;
+  if (st.rank_pts == null) st.rank_pts = 1000;
+  if (!st.login) st.login = { date: "", streak: 0 };
+  if (!st.buffs) st.buffs = [];
+  if (!st.spent) st.spent = { hp: 0, atk: 0, def: 0, crit: 0 };
+  if (st.statPts == null) st.statPts = 0;
+  if (!st.dungeons) st.dungeons = {};
+  if (!st.bosses) st.bosses = {};
+  if (!st.settings) st.settings = { autoPotion: false, battleSpeed: 1 };
+  if (st.settings.autoPotion == null) st.settings.autoPotion = false;
+  if (!st.settings.battleSpeed) st.settings.battleSpeed = 1;
+  if (!st.shadows) st.shadows = {};
+  if (!st.equip) st.equip = { active: [], weapon: null, armor: null, shadows: [], title: null, titleItem: null };
+  if (!Array.isArray(st.equip.active)) st.equip.active = [];
+  if (!Array.isArray(st.equip.shadows)) st.equip.shadows = [];
+  if (!st.stats) st.stats = {};
+  if (!st.missions) st.missions = {};
+  if (!st.punish) st.punish = { count: 0, history: [], debuffs: [] };
+  if (!st.titles) st.titles = { "مبتدی": true };
+  return st;
+}
 
 /* ---------- منحنی سختی (لول ۶ ≈ ۲۰۰۰ کلیک) ---------- */
 export function xpNeed(level) { return Math.floor(30 * Math.pow(level, 2.35)); }
@@ -37,6 +62,11 @@ export function newState(username, seedStr) {
     buffs: [],
     energyAt: nowMs(),
     seenIntro: false,
+    statPts: 0,
+    spent: { hp: 0, atk: 0, def: 0, crit: 0 },
+    dungeons: {},
+    bosses: {},
+    settings: { autoPotion: false, battleSpeed: 1 },
     updatedAt: nowMs()
   };
 }
@@ -91,6 +121,12 @@ export function combatStats(st) {
     if (d.until > nowMs()) {
       if (d.powerPct) { base.atk *= 1 - d.powerPct / 100; base.hp *= 1 - d.powerPct / 100; }
     }
+  }
+  if (st.spent) {
+    base.hp += (st.spent.hp || 0) * 18;
+    base.atk += (st.spent.atk || 0) * 3.2;
+    base.def += (st.spent.def || 0) * 2.4;
+    base.crit += (st.spent.crit || 0) * 0.85;
   }
   if (st.hpBonus) base.hp *= 1 + st.hpBonus * 0.05;
   for (const b of activeBuffs(st)) {
@@ -160,10 +196,118 @@ export function addXP(st, n) {
     evt.leveled = true;
     if (st.level % 10 === 0) st.gems += 2;
     addRewardPick(st, 1);
+    st.statPts = (st.statPts || 0) + 1;
   }
-  st.energy = Math.min(st.energy, maxEnergy(st.level));
+  st.energy = Math.min(st.energy, energyCap(st));
   st.updatedAt = nowMs();
   return evt;
+}
+
+export function energyCap(st) {
+  try { return Math.max(maxEnergy(st.level), combatStats(st).energyMax || maxEnergy(st.level)); }
+  catch (e) { return maxEnergy(st.level); }
+}
+
+export function comboMult(combo) {
+  return 1 + Math.min(1, Math.max(0, combo || 0) * 0.04);
+}
+
+export function battleAtkCd(cs) {
+  const haste = Math.max(0.5, cs?.haste || 1);
+  return Math.max(260, Math.floor(720 / haste));
+}
+
+export function spendStat(st, key) {
+  const ok = { hp: 1, atk: 1, def: 1, crit: 1 };
+  if (!ok[key]) return { error: "آمار نامعتبر" };
+  if ((st.statPts || 0) < 1) return { error: "امتیاز نداری — با لول‌آپ بگیر" };
+  st.statPts--;
+  st.spent = st.spent || { hp: 0, atk: 0, def: 0, crit: 0 };
+  st.spent[key] = (st.spent[key] || 0) + 1;
+  st.updatedAt = nowMs();
+  return { ok: true, spent: st.spent, left: st.statPts };
+}
+
+export function upgradeShadow(st, sid) {
+  const sh = st.shadows[sid];
+  if (!sh) return { error: "سایه پیدا نشد" };
+  const lv = sh.lv || 1;
+  if (lv >= 20) return { error: "حداکثر سطح سایه ۲۰ است" };
+  const cost = Math.floor(90 * Math.pow(1.42, lv - 1) * (1 + sh.power / 800));
+  if (st.gold < cost) return { error: `طلا کافی نیست (${fmt(cost)})` };
+  st.gold -= cost;
+  sh.lv = lv + 1;
+  sh.power = Math.floor(sh.power * 1.16 + 10);
+  st.updatedAt = nowMs();
+  return { ok: true, sh, cost };
+}
+
+export function fuseShadows(st, keepId, eatId) {
+  if (!keepId || !eatId || keepId === eatId) return { error: "دو سایهٔ متفاوت انتخاب کن" };
+  const a = st.shadows[keepId], b = st.shadows[eatId];
+  if (!a || !b) return { error: "سایه پیدا نشد" };
+  const cost = 180 + Math.floor((a.power + b.power) * 0.12);
+  if (st.gold < cost) return { error: `طلا کافی نیست (${fmt(cost)})` };
+  st.gold -= cost;
+  a.power = Math.floor(a.power + b.power * 0.42);
+  a.lv = Math.min(20, (a.lv || 1) + 1);
+  st.equip.shadows = (st.equip.shadows || []).filter((id) => id !== eatId);
+  delete st.shadows[eatId];
+  st.updatedAt = nowMs();
+  return { ok: true, sh: a, cost };
+}
+
+export function sweepDungeon(st, i) {
+  const rec = st.dungeons && st.dungeons[i];
+  if (!rec || !rec.cleared) return { error: "اول باید این دروازه را خودت پاکسازی کنی" };
+  const d = dungeonIndex(i);
+  if (st.level < d.level) return { error: "سطح کافی نیست" };
+  const cost = 4;
+  if (st.energy < cost) return { error: "انرژی کافی نیست" };
+  st.energy -= cost;
+  st.stats.energyUsed = (st.stats.energyUsed || 0) + cost;
+  const cs = combatStats(st);
+  const gold = Math.floor(d.gold * 0.72 * (cs.goldMult || 1));
+  const xp = Math.floor(d.xp * 0.72 * (cs.xpMult || 1));
+  gainGold(st, gold);
+  addXP(st, xp);
+  st.stats.dungeons++;
+  applyProgress(st, "dungeons", 1);
+  applyProgress(st, "energy", cost);
+  rec.count = (rec.count || 0) + 1;
+  rec.last = nowMs();
+  rec.swept = (rec.swept || 0) + 1;
+  st.updatedAt = nowMs();
+  return { ok: true, gold, xp };
+}
+
+export function markFailedMission(st, mid) {
+  const rec = st.missions[mid] = st.missions[mid] || { prog: 0 };
+  if (rec.failed || rec.claimed) return false;
+  rec.failed = true;
+  rec.failedAt = nowMs();
+  st.updatedAt = nowMs();
+  return true;
+}
+
+export function featuredMult(st, kind, idx) {
+  const f = dailyFeatured();
+  if (kind === "dungeon" && idx === f.dungeon) return f.goldBonus || 1.25;
+  if (kind === "boss" && idx === f.boss) return f.goldBonus || 1.25;
+  return 1;
+}
+
+export function firstClearMult(st, kind, idx) {
+  if (kind === "dungeon") return (st.dungeons && st.dungeons[idx] && st.dungeons[idx].cleared) ? 1 : 1.45;
+  if (kind === "boss") return (st.bosses && st.bosses[idx] && st.bosses[idx].killed) ? 1 : 1.45;
+  return 1;
+}
+
+export function codexStats(st) {
+  const dN = Object.values(st.dungeons || {}).filter((x) => x && x.cleared).length;
+  const bN = Object.values(st.bosses || {}).filter((x) => x && x.killed).length;
+  const shN = Object.keys(st.shadows || {}).length;
+  return { dungeons: dN, bosses: bN, shadows: shN };
 }
 
 /* ---------- جایزهٔ لول‌آپ: حداکثر ۳ انتخاب در روز ---------- */
@@ -196,7 +340,7 @@ export function applyPickEffect(st, p) {
     case "gold": st.gold += 500 + Math.floor(st.level * 120); break;
     case "gems": st.gems += 1; break;
     case "xp": addXP(st, 300 + st.level * 80); break;
-    case "energy": st.energy = maxEnergy(st.level); break;
+    case "energy": st.energy = energyCap(st); break;
     case "hpBonus": st.hpBonus = (st.hpBonus || 0) + 1; break;
     case "randTitle": { const t = randomTitle(); addItem(st, itemByName(t.name)?.id, 1); break; }
     case "randWeapon": { const w = randomWeapon(); addItem(st, itemByName(w)?.id, 1); break; }
@@ -256,7 +400,7 @@ export function useItem(st, itemId) {
   const fx = it.effects;
   if (fx.heal != null) return { error: "معجون جان فقط در نبرد قابل استفاده است" };
   if (fx.energy != null) {
-    st.energy = Math.min(maxEnergy(st.level), st.energy + fx.energy);
+    st.energy = Math.min(energyCap(st), st.energy + fx.energy);
     consumeItem(st, itemId);
     return { ok: true, msg: `انرژی +${fx.energy}` };
   }
@@ -271,7 +415,7 @@ export function useItem(st, itemId) {
     return { ok: true, msg: `طلا +${fmt(fx.gold)}` };
   }
   if (fx.fullEnergy != null) {
-    st.energy = maxEnergy(st.level); consumeItem(st, itemId);
+    st.energy = energyCap(st); consumeItem(st, itemId);
     return { ok: true, msg: "انرژی کامل شد!" };
   }
   if (fx.protect != null) {
@@ -310,6 +454,9 @@ export function useItem(st, itemId) {
   if (fx.chatColor != null) { st.chatColor = true; consumeItem(st, itemId); return { ok: true, msg: "رنگ ویژهٔ چت فعال شد" }; }
   if (fx.sysBell != null) { st.sysBell = true; consumeItem(st, itemId); return { ok: true, msg: "زنگولهٔ سیستم فعال شد" }; }
   if (fx.secretKey != null) { st.secretKey = (st.secretKey || 0) + 1; consumeItem(st, itemId); return { ok: true, msg: "کلید دروازهٔ مخفی ذخیره شد" }; }
+  if (fx.statPts != null) { st.statPts = (st.statPts || 0) + fx.statPts; consumeItem(st, itemId); return { ok: true, msg: `امتیاز آمار +${fx.statPts}` }; }
+  if (fx.shadowFood != null) { st.shadowFood = (st.shadowFood || 0) + 1; consumeItem(st, itemId); return { ok: true, msg: "غذای سایه ذخیره شد — در کیف روی سایه بزن" }; }
+  if (fx.ult != null || fx.parry != null) return { error: "این معجون فقط در نبرد قابل استفاده است" };
   return { error: "این آیتم اینجا قابل استفاده نیست" };
 }
 export function equipWeapon(st, itemId) {
@@ -604,7 +751,7 @@ export function activeBuffs(st) {
   return st.buffs;
 }
 export function regenEnergy(st) {
-  const cap = maxEnergy(st.level);
+  const cap = energyCap(st);
   const last = st.energyAt || st.updatedAt || nowMs();
   const gained = Math.floor((nowMs() - last) / 30000);
   if (gained > 0) {
@@ -727,6 +874,17 @@ export function achievementsOf(st) {
     { id: "win5", name: "رقیب‌کش", ok: (st.stats.wins || 0) >= 5 },
     { id: "sh3", name: "ارباب سایه", ok: Object.keys(st.shadows || {}).length >= 3 },
     { id: "combo50", name: "کمبو ۵۰", ok: (st.stats.bestCombo || 0) >= 50 },
+    { id: "l10", name: "رتبه D", ok: st.level >= 10 },
+    { id: "l60", name: "رتبه B", ok: st.level >= 60 },
+    { id: "click5k", name: "پنج‌هزار ضربه", ok: (st.stats.clicks || 0) >= 5000 },
+    { id: "boss50", name: "قصاب باس‌ها", ok: (st.stats.bosses || 0) >= 50 },
+    { id: "dun100", name: "فاتح دروازه‌ها", ok: (st.stats.dungeons || 0) >= 100 },
+    { id: "win20", name: "قهرمان رقابت", ok: (st.stats.wins || 0) >= 20 },
+    { id: "sh10", name: "ارتش سایه", ok: Object.keys(st.shadows || {}).length >= 10 },
+    { id: "combo100", name: "کمبو ۱۰۰", ok: (st.stats.bestCombo || 0) >= 100 },
+    { id: "extract10", name: "جمع‌آور روح", ok: (st.stats.extracts || 0) >= 10 },
+    { id: "gold50k", name: "ثروتمند", ok: (st.stats.goldEarned || 0) >= 50000 },
+    { id: "login7", name: "هفت روز حضور", ok: !!(st.login && st.login.streak >= 7) },
   ];
 }
 
@@ -734,7 +892,7 @@ export function tickState(st) {
   const now = nowMs();
   let changed = false;
   if (cleanDebuffs(st)) changed = true;
-  if (activeBuffs(st)) changed = true;
+  activeBuffs(st);
   const yr = yearState(st);
   if (yr.missed) {
     const ev = applyPunishment(st, `مسیر سالانه: روز ${yr.year.day} کامل نشد`, { year: true, powerPct: 8 });

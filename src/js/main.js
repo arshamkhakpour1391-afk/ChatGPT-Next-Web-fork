@@ -16,15 +16,7 @@ let offlineMode = false;
 function stateKey() { return "state:" + (account ? account.userId : offlineMode ? "guest" : "anon"); }
 function loadLocalState() {
   const raw = lsGet(stateKey());
-  if (raw && raw.v === STATE_VERSION) return raw;
-  if (raw) { // مهاجرت نسخه‌های قدیمی — هیچ‌وقت داده حذف نمی‌شود
-    raw.v = STATE_VERSION;
-    raw.gold = raw.gold || 0;
-    if (raw.rank_pts == null) raw.rank_pts = 1000;
-    if (!raw.login) raw.login = { date: "", streak: 0 };
-    if (!raw.buffs) raw.buffs = [];
-    return raw;
-  }
+  if (raw) return migrateState(raw);
   return null;
 }
 const pushCloud = debounce(async () => {
@@ -66,9 +58,8 @@ async function onAuthed(r) {
     const cloudUpdated = new Date(cloudPlayer.updated_at || 0).getTime();
     const localUpdated = local ? (local.updatedAt || 0) : 0;
     if (cloudUpdated >= localUpdated || !local) {
-      st = cloudPlayer.data;
+      st = migrateState(cloudPlayer.data);
       st.username = r.username;
-      st.v = STATE_VERSION;
       saveNow();
       ui.toast("داده‌های ابری بارگذاری شد ✓", "good");
     } else {
@@ -108,9 +99,8 @@ async function autoLogin() {
     const r = await cloud.loadPlayer(acc.userId);
     if (r.player) {
       account = acc;
-      st = r.player.data && Object.keys(r.player.data).length ? r.player.data : (loadLocalState() || newState(acc.username, acc.userId));
+      st = migrateState(r.player.data && Object.keys(r.player.data).length ? r.player.data : (loadLocalState() || newState(acc.username, acc.userId)));
       st.username = acc.username;
-      st.v = STATE_VERSION;
       saveNow();
       ui.initUI(appObj);
       ui.showApp();

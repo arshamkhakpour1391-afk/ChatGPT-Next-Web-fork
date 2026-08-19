@@ -1,11 +1,17 @@
 /* ================= صفحهٔ نبرد (باس/دانجن) + دوئل دوبعدی ================= */
 import { sfx, el, make, faNum, fmt, dur, esc, clamp, nowMs, vibrate, deepClone } from "./util.js";
-import { combatStats, calcDamage } from "./engine.js";
-import { skillIndex, itemById } from "./data.js";
+import { combatStats, calcDamage, comboMult, battleAtkCd } from "./engine.js";
+import { skillIndex, itemById, hunterClass } from "./data.js";
 
 let battle = null;
 let rafId = 0;
 let shooter = null;
+
+const CLASS_EMOJI = {
+  "شکارچی E": "🗡️", "شکارچی D": "⚔️", "شکارچی C": "🛡️", "شکارچی B": "🏹",
+  "شکارچی A": "🔥", "شکارچی S": "👑", "شکارچی SS": "💀", "شکارچی سطح ملی": "🌟",
+  "سایهٔ پادشاه": "🌑", "پادشاه سایه‌ها": "👁️"
+};
 
 /* ============ نبرد باس / دانجن ============ */
 export function openBattle(cfg) {
@@ -14,33 +20,50 @@ export function openBattle(cfg) {
   const cs = combatStats(st);
   const src = cfg.src;
   const isDungeon = cfg.mode === "dungeon";
+  const isDummy = cfg.mode === "dummy";
+  const speed = clamp(st.settings?.battleSpeed || cfg.speed || 1, 1, 2);
 
   battle = {
-    cfg, st, cs, isDungeon,
-    player: { hp: cs.hp, maxHp: cs.hp, mp: 100, shield: 0, rageUntil: 0, rageMult: 1, hasteUntil: 0 },
+    cfg, st, cs, isDungeon, isDummy,
+    player: {
+      hp: cs.hp, maxHp: cs.hp, mp: 100, shield: 0,
+      rageUntil: 0, rageMult: 1, hasteUntil: 0,
+      regen: cs.regen || 0, lastAtk: 0, atkCd: battleAtkCd(cs),
+    },
     enemy: null,
     wave: 0, totalWaves: isDungeon ? src.waves : 1,
-    cds: {}, log: [], over: false, enemyTimer: 0,
+    cds: {}, log: [], over: false,
     enemyDebuffs: { frozen: 0, blind: 0, silence: 0, poison: { until: 0, dps: 0 } },
     potionCd: 0,
+    combo: 0, bestCombo: 0, ult: 0,
+    blocking: false, blockUntil: 0, blockCd: 0, perfectNext: false,
+    speed, lastUi: 0, lastShadow: nowMs() + 1800,
+    autoPotion: !!(st.settings && st.settings.autoPotion),
+    dmgDealt: 0, dmgTaken: 0, hits: 0,
   };
-  battle.player.regen = cs.regen || 0;
+
+  const hc = hunterClass(st.level);
+  if (el("player-sprite")) el("player-sprite").textContent = CLASS_EMOJI[hc.name] || "🗡️";
+  if (el("player-name")) el("player-name").textContent = st.username || "تو";
 
   spawnWave();
   el("screen-fight").classList.remove("hidden");
   el("screen-app").classList.add("hidden");
-  el("fight-title").textContent = isDungeon ? src.name : src.name;
+  el("fight-title").textContent = src.name;
+  bindFleeOnce();
   renderActions();
-  addLog(`نبرد آغاز شد! ${src.name}`, "l-info");
+  updateHud();
+  addLog(isDummy ? "تمرین شروع شد — جایزه‌ای نیست، فقط مهارت." : `نبرد آغاز شد! ${src.name}`, "l-info");
+  if (src.element) addLog(`عنصر دشمن: ${src.element}`, "l-info");
   sfx.gate();
 
   let last = nowMs();
   const loop = () => {
     if (!battle) return;
     const now = nowMs();
-    const dt = Math.min(100, now - last);
+    const raw = Math.min(80, now - last);
     last = now;
-    if (!battle.over) update(dt);
+    if (!battle.over) update(raw * battle.speed);
     rafId = requestAnimationFrame(loop);
   };
   rafId = requestAnimationFrame(loop);
@@ -55,10 +78,15 @@ function spawnWave() {
   if (isBossWave) {
     if (b.isDungeon) {
       hp = src.bossPower; atk = Math.floor(src.bossPower / 9); def = Math.floor(src.bossPower / 60);
-      name = "نگهبان دروازه"; emoji = src.bossEmoji;
-      skills = [{ name: "ضربهٔ نگهبان", mult: 1.8, cd: 7000, color: "#ff2d55" }, { name: "غرش تاریکی", mult: 1.3, cd: 10000, color: "#9b30ff" }];
+      name = src.element ? `نگهبان ${src.element}` : "نگهبان دروازه"; emoji = src.bossEmoji;
+      skills = [
+        { name: "ضربهٔ نگهبان", mult: 1.8, cd: 7000, color: "#ff2d55" },
+        { name: "غرش تاریکی", mult: 1.3, cd: 10000, color: "#9b30ff", debuff: true },
+        { name: "ترکیدن سایه", mult: 2.1, cd: 14000, color: "#c07cff" },
+      ];
     } else {
-      hp = src.hp; atk = src.atk; def = src.def; name = src.name; emoji = src.emoji; skills = src.skills;
+      hp = src.hp; atk = src.atk; def = src.def; name = src.name; emoji = src.emoji;
+      skills = (src.skills || []).map((s) => ({ ...s }));
     }
   } else {
     hp = Math.floor(src.enemyPower * (0.45 + b.wave * 0.18));
@@ -68,11 +96,16 @@ function spawnWave() {
     emoji = src.emoji;
     skills = [];
   }
-  b.enemy = { hp, maxHp: hp, atk, def, name, emoji, skills, rage: false, atkT: nowMs() + 1400 };
+  if (b.isDummy) {
+    hp = 500 + b.st.level * 90; atk = 4 + Math.floor(b.st.level * 0.4); def = 2;
+    name = "مترسک تمرین"; emoji = "🎯"; skills = [];
+  }
+  b.enemy = { hp, maxHp: hp, atk, def, name, emoji, skills, rage: false, phase: 1, atkT: nowMs() + 1600, windup: 0 };
   b.enemyDebuffs = { frozen: 0, blind: 0, silence: 0, poison: { until: 0, dps: 0 } };
   el("enemy-sprite").textContent = emoji;
   el("enemy-name").textContent = name;
-  el("fight-wave").textContent = b.isDungeon ? `موج ${faNum(b.wave)} از ${faNum(b.totalWaves)}` : rankLabel(src.rank);
+  const extra = src.element ? ` · ${src.element}` : "";
+  el("fight-wave").textContent = b.isDummy ? "تمرین" : (b.isDungeon ? `موج ${faNum(b.wave)} از ${faNum(b.totalWaves)}${extra}` : (rankLabel(src.rank) + extra));
   el("enemy-rage").classList.add("hidden");
   const sq = el("shadow-squad");
   if (sq) {
@@ -82,49 +115,95 @@ function spawnWave() {
       if (sh) {
         const n = document.createElement("div");
         n.className = "shadow-mini";
+        n.title = sh.name;
         n.textContent = sh.emoji || "👤";
         sq.appendChild(n);
       }
     });
   }
   updateBars();
+  updateHud();
 }
 function rankLabel(r) { return r ? r.name : ""; }
 
 function update(dt) {
   const b = battle;
+  if (!b || b.over || !b.enemy) return;
   const now = nowMs();
 
-  // رجنسریشن
   if (b.player.regen && b.player.hp < b.player.maxHp) {
     b.regAcc = (b.regAcc || 0) + dt;
     if (b.regAcc > 5000) { b.regAcc = 0; heal(Math.floor(b.player.maxHp * b.player.regen / 100)); }
   }
-  // رجنسریشن MP
-  b.player.mp = Math.min(100, b.player.mp + dt * 0.006);
+  b.player.mp = Math.min(100, b.player.mp + dt * 0.008);
 
-  // افکت‌های موقت
   if (b.player.rageUntil && now > b.player.rageUntil) { b.player.rageUntil = 0; b.player.rageMult = 1; }
   if (b.player.hasteUntil && now > b.player.hasteUntil) b.player.hasteUntil = 0;
+  if (b.blocking && now > b.blockUntil) b.blocking = false;
 
-  // سم روی دشمن
   const po = b.enemyDebuffs.poison;
   if (po.until > now) {
     po.acc = (po.acc || 0) + dt;
-    if (po.acc > 1000) { po.acc = 0; enemyTake(Math.floor(po.dps)); addLog(`سم: ${faNum(po.dps)} آسیب`, "l-gold"); }
+    if (po.acc > 1000) { po.acc = 0; enemyTake(Math.max(1, Math.floor(po.dps))); addLog(`سم: ${faNum(po.dps)} آسیب`, "l-gold"); }
   }
-  // فریز/نابینایی/سکوت
   b.enemyDebuffs.frozen = Math.max(0, b.enemyDebuffs.frozen - dt);
   b.enemyDebuffs.blind = Math.max(0, b.enemyDebuffs.blind - dt);
   b.enemyDebuffs.silence = Math.max(0, b.enemyDebuffs.silence - dt);
 
-  // حمله دشمن — واقعی آسیب می‌زند!
-  if (b.enemyDebuffs.frozen > 0) return;
-  if (now >= b.enemy.atkT) {
-    enemyAttack();
-    const haste = b.enemy.rage ? 1.25 : 1.55;
-    b.enemy.atkT = now + (1100 + Math.random() * 900) * haste;
+  // حملهٔ خودکار سایه‌ها
+  if (now >= b.lastShadow) {
+    b.lastShadow = now + 2600;
+    shadowAssist();
   }
+
+  // معجون خودکار وقتی جان کم است
+  if (b.autoPotion && b.player.hp < b.player.maxHp * 0.28 && b.potionCd <= now) {
+    const pot = Object.entries(b.st.items || {})
+      .map(([id, count]) => ({ it: itemById(Number(id)), count }))
+      .find((x) => x.it && x.it.effects && x.it.effects.heal && x.count > 0);
+    if (pot) usePotion(pot.it.id);
+  }
+
+  if (now - b.lastUi > 180) {
+    b.lastUi = now;
+    updateHud();
+    refreshActionCds();
+  }
+
+  if (b.enemyDebuffs.frozen > 0) {
+    setTelegraph(false);
+    return;
+  }
+
+  // تلگراف حمله
+  if (now + 420 >= b.enemy.atkT && now < b.enemy.atkT) setTelegraph(true);
+  if (now >= b.enemy.atkT) {
+    setTelegraph(false);
+    enemyAttack();
+    const gap = b.enemy.rage ? 900 : 1300;
+    b.enemy.atkT = now + gap + Math.random() * 700;
+  }
+}
+
+function shadowAssist() {
+  const b = battle;
+  if (!b || b.over) return;
+  const ids = b.st.equip.shadows || [];
+  if (!ids.length) return;
+  let dmg = 0;
+  ids.forEach((sid) => {
+    const sh = b.st.shadows[sid];
+    if (sh) dmg += Math.floor(sh.power * 0.22 + b.cs.atk * 0.08);
+  });
+  if (dmg <= 0) return;
+  enemyTake(dmg, false);
+  addLog(`ارتش سایه: ${faNum(dmg)} آسیب`, "l-gold");
+  sfx.arise();
+}
+
+function setTelegraph(on) {
+  const n = el("enemy-telegraph");
+  if (n) n.classList.toggle("hidden", !on);
 }
 
 function enemyAttack() {
@@ -204,18 +283,21 @@ export function playerAttack() {
 
 function enemyTake(dmg, crit) {
   const b = battle;
-  if (!b || b.over) return;
-  if (b.enemyDebuffs.frozen > 0 && Math.random() < 0.5) dmg = Math.floor(dmg * 1.5); // ضربه به دشمن یخ‌زده
+  if (!b || b.over || !b.enemy) return;
+  if (b.enemyDebuffs.frozen > 0) dmg = Math.floor(dmg * 1.35);
+  dmg = Math.max(1, Math.floor(dmg));
   b.enemy.hp -= dmg;
+  b.dmgDealt += dmg;
   showFloatDmg("enemy-dmg", dmg, crit, false);
   updateBars();
   if (b.enemy.hp <= 0) {
     b.enemy.hp = 0;
     if (b.isDungeon && b.wave < b.totalWaves) {
       addLog(`موج ${faNum(b.wave)} پاک شد!`, "l-good");
-      heal(Math.floor(b.player.maxHp * 0.18));
-      b.player.mp = Math.min(100, b.player.mp + 30);
-      setTimeout(() => { if (battle) spawnWave(); }, 700);
+      heal(Math.floor(b.player.maxHp * 0.2));
+      b.player.mp = Math.min(100, b.player.mp + 35);
+      b.ult = Math.min(100, b.ult + 12);
+      setTimeout(() => { if (battle && !battle.over) spawnWave(); }, 650);
     } else {
       finish(true);
     }
@@ -314,42 +396,50 @@ export function usePotion(itemId) {
 function finish(win) {
   if (!battle || battle.over) return;
   battle.over = true;
+  setTelegraph(false);
   const b = battle;
   const st = b.st;
   const src = b.cfg.src;
   const cs = b.cs;
-  let rewards = null;
+
+  if (b.isDummy) {
+    if (win) { sfx.win(); addLog("مترسک خرد شد. آمادهٔ نبرد واقعی‌ای.", "l-good"); }
+    else { sfx.lose(); addLog("حتی مترسک زدنت!", "l-bad"); }
+    b.cfg.onExit && b.cfg.onExit();
+    b.cfg.save && b.cfg.save();
+    setTimeout(() => { if (battle) hideFight(); }, 900);
+    return;
+  }
 
   if (win) {
     sfx.win();
-    const goldMult = cs.goldMult;
-    const xpMult = cs.xpMult;
-    let gold, xp, essenceChance;
+    const extra = (b.cfg.rewardMult || 1);
+    let gold = Math.floor((src.gold || 0) * (cs.goldMult || 1) * extra);
+    let xp = Math.floor((src.xp || 0) * (cs.xpMult || 1) * extra);
+    const comboBonus = b.bestCombo >= 8 ? 1.12 : 1;
+    gold = Math.floor(gold * comboBonus);
+    xp = Math.floor(xp * comboBonus);
+    const essenceChance = (src.essenceChance || 0) * (cs.extractMult || 1);
     if (b.isDungeon) {
-      gold = Math.floor(src.gold * goldMult);
-      xp = Math.floor(src.xp * xpMult);
-      essenceChance = src.essenceChance * cs.extractMult;
       st.stats.dungeons++; st.stats.kills += b.totalWaves;
       b.cfg.applyProgress && b.cfg.applyProgress("dungeons", 1);
       b.cfg.applyProgress && b.cfg.applyProgress("kills", b.totalWaves);
     } else {
-      gold = Math.floor(src.gold * goldMult);
-      xp = Math.floor(src.xp * xpMult);
-      essenceChance = src.essenceChance * cs.extractMult;
       st.stats.bosses++; st.stats.kills++;
       b.cfg.applyProgress && b.cfg.applyProgress("bosses", 1);
     }
-    rewards = { gold, xp, essenceChance, isDungeon: b.isDungeon };
-    b.cfg.onWin && b.cfg.onWin(rewards);
+    addLog(`پیروزی! کمبو ${faNum(b.bestCombo)} · آسیب ${faNum(b.dmgDealt)}`, "l-good");
+    b.cfg.onWin && b.cfg.onWin({ gold, xp, essenceChance, isDungeon: b.isDungeon, combo: b.bestCombo, dmgDealt: b.dmgDealt });
   } else {
     sfx.lose();
     const goldLoss = Math.min(st.gold, Math.floor(st.gold * 0.08) + 25);
     st.gold -= goldLoss;
+    addLog("شکست خوردی...", "l-bad");
     b.cfg.onLose && b.cfg.onLose({ goldLoss });
   }
   st.updatedAt = nowMs();
   b.cfg.save && b.cfg.save();
-  setTimeout(() => { if (battle) hideFight(); }, win ? 1200 : 1600);
+  setTimeout(() => { if (battle) hideFight(); }, win ? 1100 : 1500);
 }
 
 function showFloatDmg(zoneId, amount, crit, fromEnemy) {
@@ -399,51 +489,150 @@ function addLog(txt, cls) {
 function renderActions() {
   const b = battle; if (!b) return;
   const box = el("fight-actions");
+  if (!box) return;
   box.innerHTML = "";
-  // حمله
-  const atk = make(`<button class="fa-btn attack"><span class="fa-ico">⚔️</span>حمله</button>`);
-  atk.addEventListener("click", () => { playerAttack(); renderActions(); });
+  const atk = make(`<button class="fa-btn attack" data-act="atk"><span class="fa-ico">⚔️</span>حمله</button>`);
+  atk.addEventListener("click", () => { playerAttack(); });
   box.appendChild(atk);
-  // مهارت‌های فعال غیرپسیو
+
+  const blk = make(`<button class="fa-btn" data-act="block"><span class="fa-ico">🛡️</span>بلوک</button>`);
+  blk.addEventListener("click", () => {
+    const r = playerBlock();
+    if (r && r.error && b.cfg.toast) b.cfg.toast(r.error, "bad");
+  });
+  box.appendChild(blk);
+
+  const ult = make(`<button class="fa-btn fa-ult" data-act="ult"><span class="fa-ico">🌑</span>فرمان سایه</button>`);
+  ult.addEventListener("click", () => {
+    const r = useUltimate();
+    if (r && r.error && b.cfg.toast) b.cfg.toast(r.error, "bad");
+  });
+  box.appendChild(ult);
+
   const actives = b.st.equip.active.map((sid) => skillIndex(sid)).filter((s) => s && !s.passive).slice(0, 4);
   actives.forEach((sk) => {
-    const cdLeft = (b.cds[sk.i] || 0) - nowMs();
-    const btn = make(`<button class="fa-btn"><span class="fa-ico">${sk.icon}</span>${esc(sk.name)}</button>`);
-    if (cdLeft > 0) {
-      const ov = make(`<div class="cd-ov">${dur(cdLeft)}</div>`);
-      btn.appendChild(ov);
-      btn.disabled = true;
-    } else {
-      btn.addEventListener("click", () => { useSkill(sk.i); renderActions(); });
-    }
+    const btn = make(`<button class="fa-btn" data-sk="${sk.i}"><span class="fa-ico">${sk.icon}</span>${esc(sk.name)}</button>`);
+    btn.addEventListener("click", () => {
+      const r = useSkill(sk.i);
+      if (r && r.error && b.cfg.toast) b.cfg.toast(r.error, "bad");
+      renderActions();
+    });
     box.appendChild(btn);
   });
-  // معجون‌ها
+
   const potions = Object.entries(b.st.items || {})
     .map(([id, count]) => ({ it: itemById(Number(id)), count }))
-    .filter((x) => x.it && x.it.effects && x.it.effects.heal)
+    .filter((x) => x.it && x.it.effects && (x.it.effects.heal || x.it.effects.ult || x.it.effects.parry))
     .slice(0, 2);
   potions.forEach(({ it, count }) => {
-    const btn = make(`<button class="fa-btn"><span class="fa-ico">🧪</span>${esc(it.name)} ×${faNum(count)}</button>`);
-    btn.addEventListener("click", () => { const r = usePotion(it.id); if (r && r.error && b.cfg.toast) b.cfg.toast(r.error, "bad"); renderActions(); });
+    const btn = make(`<button class="fa-btn" data-pot="${it.id}"><span class="fa-ico">🧪</span>${esc(it.name)} ×${faNum(count)}</button>`);
+    btn.addEventListener("click", () => {
+      const r = usePotion(it.id);
+      if (r && r.error && b.cfg.toast) b.cfg.toast(r.error, "bad");
+    });
     box.appendChild(btn);
   });
-  // فرار
-  const flee = make(`<button class="fa-btn"><span class="fa-ico">🏃</span>فرار</button>`);
-  flee.addEventListener("click", () => {
-    if (!confirm("از نبرد فرار کنی؟ جایزه از دست می‌رود.")) return;
-    battle.over = true;
-    b.cfg.onExit && b.cfg.onExit();
-    b.cfg.save && b.cfg.save();
-    hideFight();
+
+  const spd = make(`<button class="fa-btn" data-act="spd"><span class="fa-ico">⏩</span>سرعت ×${faNum(b.speed)}</button>`);
+  spd.addEventListener("click", () => {
+    b.speed = b.speed >= 2 ? 1 : 2;
+    if (b.st.settings) b.st.settings.battleSpeed = b.speed;
+    spd.querySelector("span") && (spd.lastChild.textContent = `سرعت ×${faNum(b.speed)}`);
+    addLog(b.speed === 2 ? "سرعت نبرد ۲×" : "سرعت نبرد ۱×", "l-info");
   });
+  box.appendChild(spd);
+
+  const flee = make(`<button class="fa-btn" data-act="flee"><span class="fa-ico">🏃</span>فرار</button>`);
+  flee.addEventListener("click", () => askFlee());
   box.appendChild(flee);
+  updateBars();
+  refreshActionCds();
+}
+
+function refreshActionCds() {
+  const b = battle; if (!b) return;
+  const box = el("fight-actions");
+  if (!box) return;
+  const now = nowMs();
+  box.querySelectorAll("[data-sk]").forEach((btn) => {
+    const sid = Number(btn.dataset.sk);
+    const left = (b.cds[sid] || 0) - now;
+    let ov = btn.querySelector(".cd-ov");
+    if (left > 0) {
+      if (!ov) { ov = make(`<div class="cd-ov"></div>`); btn.appendChild(ov); }
+      ov.textContent = dur(left);
+      btn.disabled = true;
+    } else if (ov) {
+      ov.remove();
+      btn.disabled = false;
+    }
+  });
+  const blk = box.querySelector("[data-act=block]");
+  if (blk) {
+    const left = b.blockCd - now;
+    let ov = blk.querySelector(".cd-ov");
+    if (left > 0) {
+      if (!ov) { ov = make(`<div class="cd-ov"></div>`); blk.appendChild(ov); }
+      ov.textContent = dur(left);
+    } else if (ov) ov.remove();
+  }
+  const ult = box.querySelector("[data-act=ult]");
+  if (ult) ult.classList.toggle("ready", b.ult >= 100);
+}
+
+function updateHud() {
+  const b = battle; if (!b) return;
+  const combo = el("fight-combo");
+  if (combo) {
+    combo.textContent = b.combo > 1 ? `کمبو ×${faNum(b.combo)}` : "";
+    combo.classList.toggle("hot", b.combo >= 8);
+  }
+  const fill = el("ult-fill");
+  if (fill) fill.style.width = clamp(b.ult, 0, 100) + "%";
+  const stBox = el("fight-status");
+  if (stBox) {
+    const bits = [];
+    if (b.enemyDebuffs.frozen > 0) bits.push("❄️ یخ");
+    if (b.enemyDebuffs.poison.until > nowMs()) bits.push("☠️ سم");
+    if (b.enemyDebuffs.blind > 0) bits.push("🌑 کور");
+    if (b.enemyDebuffs.silence > 0) bits.push("🔇 سکوت");
+    if (b.player.rageUntil > nowMs()) bits.push("🔥 خشم");
+    if (b.player.shield > 0) bits.push("🛡️ سپر");
+    if (b.blocking) bits.push("✋ بلوک");
+    stBox.innerHTML = bits.map((x) => `<span class="st-chip">${x}</span>`).join("");
+  }
   updateBars();
 }
 
+function askFlee() {
+  const b = battle;
+  if (!b || b.over) return;
+  if (b.isDummy) { battle.over = true; hideFight(); return; }
+  const ok = typeof window !== "undefined" && window.confirm
+    ? window.confirm("از نبرد فرار کنی؟ جایزه از دست می‌رود و انرژی برنمی‌گردد.")
+    : true;
+  if (!ok) return;
+  battle.over = true;
+  addLog("فرار کردی.", "l-bad");
+  b.cfg.onExit && b.cfg.onExit();
+  b.cfg.save && b.cfg.save();
+  hideFight();
+}
+
+let fleeBound = false;
+function bindFleeOnce() {
+  if (fleeBound) return;
+  fleeBound = true;
+  el("btn-flee")?.addEventListener("click", () => askFlee());
+}
+
 export function hideFight() {
-  el("screen-fight").classList.add("hidden");
-  el("screen-app").classList.remove("hidden");
+  cancelAnimationFrame(rafId);
+  setTelegraph(false);
+  const f = el("screen-fight");
+  const a = el("screen-app");
+  if (f) f.classList.add("hidden");
+  if (a) a.classList.remove("hidden");
   battle = null;
 }
 export function isFighting() { return !!battle; }

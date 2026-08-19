@@ -66,7 +66,8 @@ export function dungeonIndex(i) {
     isBossGate, gold, xp, essenceChance,
     emoji: ENEMY_EMOJI[Math.floor(rng() * ENEMY_EMOJI.length)],
     bossEmoji: BOSS_EMOJI[Math.floor(rng() * BOSS_EMOJI.length)],
-    story
+    story,
+    element: ELEMENTS[i % ELEMENTS.length]
   };
 }
 function makeDungeonStory(rng, noun, adj, monster, level, tier) {
@@ -322,8 +323,15 @@ export const SHOP_ITEMS = (() => {
   SPECIALS.forEach((s) => {
     add("special", s.name, "💎", "آیتم ویژهٔ سیستم", { gem: 4 }, s);
   });
+  add("special", "کتاب امتیاز مهارت", "📘", "۲ امتیاز آمار فوری", { gem: 6 }, { statPts: 2 });
+  add("special", "غذای سایه", "🍖", "ارتقای فوری یک سایه", { gold: 2500, gem: null }, { shadowFood: 1 });
+  add("potion", "معجون نهایی", "🧪", "شارژ مهارت نهایی در نبرد", { gold: 420, gem: null }, { ult: 1 });
+  add("potion", "معجون پاری", "🧪", "بلوک بعدی پاری کامل است", { gold: 280, gem: null }, { parry: 1 });
   return items;
 })();
+
+export const ELEMENTS = ["آتش", "یخ", "رعد", "سایه", "سم", "نور"];
+export function elementOf(i) { return ELEMENTS[((i % 6) + 6) % 6]; }
 export function itemById(id) { return SHOP_ITEMS.find((x) => x.id === id); }
 
 /* ---------- ماموریت‌ها (۱۰۰۰+ ترکیب) ---------- */
