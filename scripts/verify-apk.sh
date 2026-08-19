@@ -58,15 +58,24 @@ assert "resources.arsc" in names
 print(f"  ✓ zip سالم — {len(names)} فایل — assets/x.htm موجود است")
 EOF
 
-echo "== 6) آندروگارد =="
+echo "== 6) آندروگارد + v2 =="
 python3 - "$APK" <<'EOF'
 import sys, logging
 logging.disable(logging.CRITICAL)
 from androguard.core.apk import APK
 a = APK(sys.argv[1])
 assert a.is_signed_v1(), "v1 signature missing"
-print("  ✓ signed v1 | package:", a.get_package(), "| label:", a.get_app_name(), "| minSdk:", a.get_min_sdk_version(), "| targetSdk:", a.get_target_sdk_version())
+assert a.is_signed_v2(), "v2 signature missing — اندروید ۱۱+ نصب نمی‌کند"
+name = a.get_app_name()
+print("  ✓ signed v1+v2 | package:", a.get_package(), "| label:", name, "| minSdk:", a.get_min_sdk_version(), "| targetSdk:", a.get_target_sdk_version())
+assert "solo" in name.lower() or "system" in name.lower() or "سولو" in name, "bad label: "+name
 print("  ✓ certs:", [str(c.serial_number)[:16] for c in a.get_certificates()])
+# resources.arsc must be stored
+import zipfile
+z = zipfile.ZipFile(sys.argv[1])
+info = z.getinfo("resources.arsc")
+assert info.compress_type == 0, "resources.arsc must be uncompressed"
+print("  ✓ resources.arsc uncompressed")
 EOF
 
 echo "=== همهٔ بررسی‌ها موفق بود ✓ ==="

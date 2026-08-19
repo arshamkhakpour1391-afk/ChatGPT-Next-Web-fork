@@ -128,6 +128,7 @@ let swipeX = 0;
 const PAGES_ORDER = ["home", "missions", "gates", "battle", "shop", "bag", "duel", "chat", "ranks"];
 $("pages")?.addEventListener("touchstart", (e) => { swipeX = e.touches[0].clientX; }, { passive: true });
 $("pages")?.addEventListener("touchend", (e) => {
+  if (currentPage === "chat") return;
   const dx = e.changedTouches[0].clientX - swipeX;
   if (Math.abs(dx) > 70) {
     const idx = PAGES_ORDER.indexOf(currentPage);
@@ -1464,15 +1465,51 @@ $("btn-settings").addEventListener("click", () => {
     title: "تنظیمات",
     body: `
       <div class="m-meta" style="justify-content:space-between"><span>وضعیت ابر: <b>${cloudState}</b></span><span>دیتابیس: <b>${cloud.schemaReady() ? "✅ نصب شده" : "❌ نصب نشده"}</b></span></div>
-      <div class="m-meta" style="justify-content:space-between"><span>حساب: <b>${esc(st.username)}</b></span><span>نسخهٔ ۲.۰</span></div>
-      <p style="margin-top:10px">ساختهٔ ارشام — همهٔ داده‌ها در فضای ابری Supabase و حافظهٔ دستگاه ذخیره می‌شوند. حتی اگر برنامه را ببندی، چیزی از بین نمی‌رود.</p>
+      <div class="m-meta" style="justify-content:space-between"><span>حساب: <b>${esc(st.username)}</b></span><span>Solo System ۲.۲</span></div>
+      <p style="margin-top:10px">ساختهٔ ارشام — داده‌ها روی ابر و دستگاه می‌مانند.</p>
       <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px">
+        <button class="btn btn-ghost btn-sm" id="set-sound">${isMuted() ? "🔊 روشن کردن صدا" : "🔇 خاموش کردن صدا"}</button>
+        <button class="btn btn-ghost btn-sm" id="set-export">خروجی پشتیبان ذخیره</button>
+        <button class="btn btn-ghost btn-sm" id="set-import">بازیابی از پشتیبان</button>
         <button class="btn btn-ghost btn-sm" id="set-install">نصب / بررسی دیتابیس ابری</button>
         <button class="btn btn-ghost btn-sm" id="set-notif">فعال‌سازی اعلان‌ها</button>
         <button class="btn btn-red btn-sm" id="set-logout">خروج از حساب</button>
       </div>`,
     actions: [{ label: "بستن", cb() {} }]
   });
+  $("set-sound").onclick = () => { setMuted(!isMuted()); toast(isMuted() ? "صدا خاموش شد" : "صدا روشن شد", "info"); closeModal(); };
+  $("set-export").onclick = () => {
+    try {
+      const blob = new Blob([JSON.stringify(st)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "solo-system-save.json";
+      a.click();
+      toast("فایل پشتیبان ذخیره شد", "good");
+    } catch (e) { toast("خروجی گرفته نشد", "bad"); }
+  };
+  $("set-import").onclick = () => {
+    const inp = document.createElement("input");
+    inp.type = "file"; inp.accept = "application/json";
+    inp.onchange = () => {
+      const f = inp.files && inp.files[0];
+      if (!f) return;
+      const r = new FileReader();
+      r.onload = () => {
+        try {
+          const data = JSON.parse(r.result);
+          if (!data || typeof data.level !== "number") throw new Error("bad");
+          Object.assign(app.getSt(), data);
+          app.saveNow();
+          toast("ذخیره بازیابی شد", "good");
+          closeModal();
+          renderHome();
+        } catch (e) { toast("فایل پشتیبان نامعتبر است", "bad"); }
+      };
+      r.readAsText(f);
+    };
+    inp.click();
+  };
   $("set-install").onclick = () => showInstaller();
   $("set-notif").onclick = () => { requestNotifPerm().then(() => toast("اعلان‌ها فعال شد", "good")); };
   $("set-logout").onclick = () => { closeModal(); app.logout(); };
@@ -1577,7 +1614,7 @@ export function showAuth(errMsg) {
       $("auth-note").innerHTML += `<br><a href="#" id="auth-install" style="color:#ffd76b;font-weight:800">⚠️ دیتابیس ابری نصب نیست — برای فعال شدن آنلاین کلیک کن</a>`;
       $("auth-install")?.addEventListener("click", (e2) => { e2.preventDefault(); showInstaller(); });
     } else {
-      $("auth-offline").classList.add("hidden");
+      $("auth-note").innerHTML += `<br><span style="color:#6fffa8">دیتابیس ابری آماده است — ثبت‌نام کن تا همه آنلاین باشند.</span>`;
     }
   });
 }

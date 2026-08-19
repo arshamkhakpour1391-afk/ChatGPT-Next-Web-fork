@@ -207,7 +207,7 @@ function enemyTake(dmg, crit) {
   if (!b || b.over) return;
   if (b.enemyDebuffs.frozen > 0 && Math.random() < 0.5) dmg = Math.floor(dmg * 1.5); // ضربه به دشمن یخ‌زده
   b.enemy.hp -= dmg;
-  showFloatDmg("enemy-dmg", dmg, crit, true);
+  showFloatDmg("enemy-dmg", dmg, crit, false);
   updateBars();
   if (b.enemy.hp <= 0) {
     b.enemy.hp = 0;
@@ -431,6 +431,7 @@ function renderActions() {
   // فرار
   const flee = make(`<button class="fa-btn"><span class="fa-ico">🏃</span>فرار</button>`);
   flee.addEventListener("click", () => {
+    if (!confirm("از نبرد فرار کنی؟ جایزه از دست می‌رود.")) return;
     battle.over = true;
     b.cfg.onExit && b.cfg.onExit();
     b.cfg.save && b.cfg.save();

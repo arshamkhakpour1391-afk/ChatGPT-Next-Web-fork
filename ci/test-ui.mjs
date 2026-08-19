@@ -44,7 +44,7 @@ await wait(1200);
 
 t("صفحهٔ ورود نمایش داده می‌شود", () => {
   assert.ok(visible(q("#screen-auth")), "صفحه ورود باید دیده شود");
-  assert.ok(q(".auth-title").textContent.includes("سولو"), "عنوان فارسی");
+  assert.ok(/سولو|Solo/i.test(q(".auth-title").textContent + q(".auth-sub").textContent), "عنوان Solo System");
 });
 
 t("ورود آفلاین → صفحهٔ اصلی می‌آید", () => {
