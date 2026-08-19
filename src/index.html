@@ -24,7 +24,7 @@
           <svg class="auth-sword" viewBox="0 0 64 64"><path d="M32 6 L38 26 L56 30 L38 34 L32 58 L26 34 L8 30 L26 26 Z" fill="#7c5cff"/><path d="M32 6 L38 26 L32 30 Z" fill="#c7b8ff"/></svg>
         </div>
         <h1 class="auth-title">سیستم سولو لولینگ</h1>
-        <p class="auth-sub">به دنیای شکارچی‌ها خوش آمدی — ساختهٔ ارشام</p>
+        <p class="auth-sub">به دنیای شکارچی‌ها خوش آمدی — ساختهٔ ارشام · نسخه ۲.۱</p>
       </div>
       <div class="auth-tabs">
         <button class="auth-tab active" data-authtab="login">ورود</button>
@@ -98,6 +98,7 @@
               <span>کلیک امروز: <b id="today-clicks">0</b></span>
               <span>بهترین کمبو: <b id="best-combo">0</b></span>
             </div>
+            <div class="buff-strip" id="buff-strip"></div>
             <div class="dmg-pop-zone" id="dmg-zone"></div>
           </div>
         </div>
@@ -106,6 +107,8 @@
           <div class="sys-window-head"><span class="sys-title">سیستم</span><button class="sys-close" id="sys-close">✕</button></div>
           <div class="sys-window-body" id="sys-window-body"></div>
         </div>
+
+        <div class="home-stats" id="home-stats"></div>
 
         <div class="card" id="daily-quests-card">
           <div class="card-head"><h3>ماموریت‌های روزانه اجباری</h3><span class="chip chip-red">اگر انجام نشود: مجازات!</span></div>
@@ -138,6 +141,7 @@
       <!-- ===== تب دروازه ===== -->
       <div class="page" data-page="gates">
         <div class="page-head"><h2>دروازه‌ها (دانجن)</h2><p>۱۰٬۰۰۰ دانجن واقعی — از E تا پادشاه سایه‌ها</p></div>
+        <input class="search-box" id="gate-search" type="search" placeholder="جستجوی دروازه یا هیولا..." maxlength="40">
         <div class="gate-filters" id="gate-filters"></div>
         <div class="list" id="gate-list"></div>
         <div class="load-more-wrap"><button class="btn btn-ghost hidden" id="gates-more">نمایش بیشتر</button></div>
@@ -146,6 +150,7 @@
       <!-- ===== تب نبرد (باس‌ها) ===== -->
       <div class="page" data-page="battle">
         <div class="page-head"><h2>نبرد با باس‌ها</h2><p>۱٬۰۰۰ باس — هر باس به تو آسیب می‌زند!</p></div>
+        <input class="search-box" id="boss-search" type="search" placeholder="جستجوی باس..." maxlength="40">
         <div class="battle-filters" id="battle-filters"></div>
         <div class="list" id="boss-list"></div>
         <div class="load-more-wrap"><button class="btn btn-ghost hidden" id="bosses-more">نمایش بیشتر</button></div>

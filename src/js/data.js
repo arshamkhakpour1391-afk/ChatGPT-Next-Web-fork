@@ -410,7 +410,7 @@ export function dailyPicks(dayKey, pickIndex) {
   return out;
 }
 export function itemByName(name) { return SHOP_ITEMS.find((x) => x.name === name); }
-export function randomTitle() { return TITLES[Math.floor(Math.random() * TITLES.length)]; }
+export function randomTitle() { return SHOP_TITLES[Math.floor(Math.random() * SHOP_TITLES.length)]; }
 export function randomWeapon() { return WEAPONS[Math.floor(Math.random() * WEAPONS.length)]; }
 
 /* ---------- عناوین پیشرفت ---------- */

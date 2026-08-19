@@ -5,10 +5,10 @@ import {
 import {
   rankOfLevel, hunterClass, dungeonIndex, bossIndex, skillIndex,
   SHOP_ITEMS, itemById, itemByName, missionOf, MISSION_SLOTS, MISSION_INTERVAL_MS,
-  yearQuestDay, dailyPicks, randomTitle, randomWeapon, YEAR_DAYS
+  yearQuestDay, dailyPicks, randomTitle, randomWeapon, YEAR_DAYS, TITLES
 } from "./data.js";
 
-export const STATE_VERSION = 2;
+export const STATE_VERSION = 3;
 
 /* ---------- منحنی سختی (لول ۶ ≈ ۲۰۰۰ کلیک) ---------- */
 export function xpNeed(level) { return Math.floor(30 * Math.pow(level, 2.35)); }
@@ -32,6 +32,11 @@ export function newState(username, seedStr) {
     titles: { "مبتدی": true },
     weekly: { week: weekKey(), xp: 0 },
     duelLog: [],
+    rank_pts: 1000,
+    login: { date: "", streak: 0 },
+    buffs: [],
+    energyAt: nowMs(),
+    seenIntro: false,
     updatedAt: nowMs()
   };
 }
@@ -88,6 +93,18 @@ export function combatStats(st) {
     }
   }
   if (st.hpBonus) base.hp *= 1 + st.hpBonus * 0.05;
+  for (const b of activeBuffs(st)) {
+    if (b.k === "atk") base.atk *= 1 + b.pct / 100;
+    if (b.k === "def") base.def *= 1 + b.pct / 100;
+    if (b.k === "hp") base.hp *= 1 + b.pct / 100;
+    if (b.k === "crit") base.crit += b.pct;
+    if (b.k === "haste") base.haste *= 1 + b.pct / 100;
+    if (b.k === "xp") base.xpMult *= 1 + b.pct / 100;
+    if (b.k === "gold") base.goldMult *= 1 + b.pct / 100;
+    if (b.k === "vamp") base.lifesteal += b.pct;
+    if (b.k === "extract") base.extractMult *= 1 + b.pct / 100;
+    if (b.k === "regen") base.regen = Math.max(base.regen || 0, b.pct);
+  }
   base.hp = Math.floor(base.hp); base.atk = Math.floor(base.atk); base.def = Math.floor(base.def);
   base.energyMax = Math.floor(base.energyMax);
   return base;
@@ -122,6 +139,7 @@ export function doTrain(st) {
     const bonus = Math.floor(25 * st.level * c.xpMult);
     addXP(st, bonus); evt.xp += bonus; evt.comboBonus = true;
   }
+  applyProgress(st, "combo", st.stats.combo);
   st.updatedAt = nowMs();
   return evt;
 }
@@ -193,6 +211,7 @@ export function gainGold(st, n) {
   st.dayLog = st.dayLog || { date: todayKey(), xp: 0, clicks: 0, gold: 0 };
   if (st.dayLog.date !== todayKey()) st.dayLog = { date: todayKey(), xp: 0, clicks: 0, gold: 0 };
   st.dayLog.gold += Math.floor(n);
+  applyProgress(st, "gold", Math.floor(n));
   st.updatedAt = nowMs();
 }
 export function addItem(st, itemId, count = 1) {
@@ -277,6 +296,20 @@ export function useItem(st, itemId) {
     return { ok: true, msg: "جعبهٔ شانس: " + msg };
   }
   if (fx.duelTicket != null) { st.duelTicket = (st.duelTicket || 0) + 1; consumeItem(st, itemId); return { ok: true, msg: "تیکت مبارزه ذخیره شد" }; }
+  if (fx.rage != null) { addBuff(st, "atk", 25, 180000); consumeItem(st, itemId); return { ok: true, msg: "خشم! حمله +۲۵٪ برای ۳ دقیقه" }; }
+  if (fx.haste != null) { addBuff(st, "haste", 20, 180000); consumeItem(st, itemId); return { ok: true, msg: "سرعت +۲۰٪ برای ۳ دقیقه" }; }
+  if (fx.focus != null) { addBuff(st, "xp", 30, 300000); consumeItem(st, itemId); return { ok: true, msg: "تمرکز! XP +۳۰٪ برای ۵ دقیقه" }; }
+  if (fx.luck != null) { addBuff(st, "crit", 18, 180000); consumeItem(st, itemId); return { ok: true, msg: "شانس کریت +۱۸٪ برای ۳ دقیقه" }; }
+  if (fx.def != null) { addBuff(st, "def", 22, 180000); consumeItem(st, itemId); return { ok: true, msg: "دفاع +۲۲٪ برای ۳ دقیقه" }; }
+  if (fx.atk != null) { addBuff(st, "atk", 22, 180000); consumeItem(st, itemId); return { ok: true, msg: "حمله +۲۲٪ برای ۳ دقیقه" }; }
+  if (fx.vamp != null) { addBuff(st, "vamp", 12, 180000); consumeItem(st, itemId); return { ok: true, msg: "خون‌آشام +۱۲٪ برای ۳ دقیقه" }; }
+  if (fx.regen != null) { addBuff(st, "regen", 6, 180000); consumeItem(st, itemId); return { ok: true, msg: "بازیابی فعال شد" }; }
+  if (fx.greed != null) { addBuff(st, "gold", 30, 300000); consumeItem(st, itemId); return { ok: true, msg: "طمع! طلا +۳۰٪ برای ۵ دقیقه" }; }
+  if (fx.shadow != null) { addBuff(st, "extract", 25, 300000); consumeItem(st, itemId); return { ok: true, msg: "شانس سایه +۲۵٪ برای ۵ دقیقه" }; }
+  if (fx.yearBoost != null) { st.year.prog.clicks = (st.year.prog.clicks || 0) + 80; consumeItem(st, itemId); return { ok: true, msg: "مسیر سالانه شتاب گرفت" }; }
+  if (fx.chatColor != null) { st.chatColor = true; consumeItem(st, itemId); return { ok: true, msg: "رنگ ویژهٔ چت فعال شد" }; }
+  if (fx.sysBell != null) { st.sysBell = true; consumeItem(st, itemId); return { ok: true, msg: "زنگولهٔ سیستم فعال شد" }; }
+  if (fx.secretKey != null) { st.secretKey = (st.secretKey || 0) + 1; consumeItem(st, itemId); return { ok: true, msg: "کلید دروازهٔ مخفی ذخیره شد" }; }
   return { error: "این آیتم اینجا قابل استفاده نیست" };
 }
 export function equipWeapon(st, itemId) {
@@ -397,7 +430,7 @@ export function applyProgress(st, type, amount) {
       if (m.type !== type) continue;
       const rec = st.missions[m.id] = st.missions[m.id] || { prog: 0 };
       if (rec.done) continue;
-      rec.prog = (rec.prog || 0) + amount;
+      rec.prog = type === "combo" ? Math.max(rec.prog || 0, amount) : (rec.prog || 0) + amount;
       if (rec.prog >= m.n) { rec.done = true; rec.doneAt = now; }
     }
   }
@@ -559,10 +592,71 @@ export function calcDamage(atk, def, critChance, mult = 1) {
   return { dmg, crit };
 }
 
+/* ---------- باف / ورود روزانه / انرژی / رنک ---------- */
+export function addBuff(st, k, pct, ms) {
+  st.buffs = st.buffs || [];
+  st.buffs.push({ k, pct, until: nowMs() + ms });
+  st.updatedAt = nowMs();
+}
+export function activeBuffs(st) {
+  const now = nowMs();
+  st.buffs = (st.buffs || []).filter((b) => b.until > now);
+  return st.buffs;
+}
+export function regenEnergy(st) {
+  const cap = maxEnergy(st.level);
+  const last = st.energyAt || st.updatedAt || nowMs();
+  const gained = Math.floor((nowMs() - last) / 30000);
+  if (gained > 0) {
+    st.energy = Math.min(cap, (st.energy || 0) + gained);
+    st.energyAt = nowMs();
+    st.updatedAt = nowMs();
+    return gained;
+  }
+  return 0;
+}
+export function claimDailyLogin(st) {
+  const today = todayKey();
+  st.login = st.login || { date: "", streak: 0 };
+  if (st.login.date === today) return { already: true, streak: st.login.streak || 0 };
+  const prev = st.login.date;
+  let streak = 1;
+  if (prev) {
+    const prevMs = keyToMs(prev);
+    const gap = Math.round((keyToMs(today) - prevMs) / 86400000);
+    if (gap === 1) streak = (st.login.streak || 0) + 1;
+  }
+  const gold = 80 + streak * 25 + st.level * 10;
+  const xp = 120 + streak * 20 + st.level * 8;
+  const gems = streak % 7 === 0 ? 2 : (streak % 3 === 0 ? 1 : 0);
+  gainGold(st, gold);
+  addXP(st, xp);
+  st.gems += gems;
+  st.login = { date: today, streak };
+  st.updatedAt = nowMs();
+  return { ok: true, gold, xp, gems, streak };
+}
+export function unlockTitles(st) {
+  st.titles = st.titles || {};
+  const newly = [];
+  for (const t of TITLES) {
+    if (st.titles[t.name]) continue;
+    try { if (t.need(st)) { st.titles[t.name] = true; newly.push(t.name); } } catch (e) {}
+  }
+  if (newly.length) st.updatedAt = nowMs();
+  return newly;
+}
+export function addRankPts(st, n) {
+  st.rank_pts = Math.max(0, (st.rank_pts == null ? 1000 : st.rank_pts) + n);
+  st.updatedAt = nowMs();
+  return st.rank_pts;
+}
+
 /* ---------- فروشگاه روزانه ---------- */
 export function dailyDeals(st) {
   const today = todayKey();
-  const rng = mulberry32(seedOf("deals", today));
+  const extra = st && st.shopReroll ? String(st.shopReroll) : "0";
+  const rng = mulberry32(seedOf("deals", today, extra));
   const cats = ["weapon", "armor", "potion", "scroll", "stone", "title", "special"];
   const deals = [];
   const used = new Set();
@@ -589,6 +683,7 @@ export function tickState(st) {
   const now = nowMs();
   let changed = false;
   if (cleanDebuffs(st)) changed = true;
+  if (activeBuffs(st)) changed = true;
   const yr = yearState(st);
   if (yr.missed) {
     const ev = applyPunishment(st, `مسیر سالانه: روز ${yr.year.day} کامل نشد`, { year: true, powerPct: 8 });
@@ -596,6 +691,11 @@ export function tickState(st) {
     st.pendingPunish = ev;
   }
   dailyQuests(st);
+  const login = claimDailyLogin(st);
+  if (login.ok) { st.pendingLogin = login; changed = true; }
+  const titles = unlockTitles(st);
+  if (titles.length) { st.pendingTitles = (st.pendingTitles || []).concat(titles); changed = true; }
+  if (regenEnergy(st) > 0) changed = true;
   if (st.updatedAt !== now) { st.updatedAt = now; changed = true; }
   return changed;
 }

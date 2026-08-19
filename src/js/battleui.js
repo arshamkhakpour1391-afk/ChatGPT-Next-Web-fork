@@ -74,6 +74,19 @@ function spawnWave() {
   el("enemy-name").textContent = name;
   el("fight-wave").textContent = b.isDungeon ? `موج ${faNum(b.wave)} از ${faNum(b.totalWaves)}` : rankLabel(src.rank);
   el("enemy-rage").classList.add("hidden");
+  const sq = el("shadow-squad");
+  if (sq) {
+    sq.innerHTML = "";
+    (b.st.equip.shadows || []).forEach((sid) => {
+      const sh = b.st.shadows[sid];
+      if (sh) {
+        const n = document.createElement("div");
+        n.className = "shadow-mini";
+        n.textContent = sh.emoji || "👤";
+        sq.appendChild(n);
+      }
+    });
+  }
   updateBars();
 }
 function rankLabel(r) { return r ? r.name : ""; }
@@ -177,6 +190,7 @@ export function playerAttack() {
   if (!b || b.over) return;
   if (b.player.rageUntil && nowMs() > b.player.rageUntil) { b.player.rageUntil = 0; b.player.rageMult = 1; }
   let mult = 1 * b.player.rageMult * (b.player.hasteUntil > nowMs() ? 1.25 : 1);
+  if (!b.isDungeon) mult *= (b.cs.slayer || 1);
   let critChance = b.cs.crit;
   const { dmg, crit } = calcDamage(b.cs.atk, b.enemy.def, critChance, mult);
   enemyTake(dmg, crit);

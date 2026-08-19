@@ -1,6 +1,6 @@
 /* ================= نقطهٔ شروع برنامه ================= */
-import { el, lsGet, lsSet, lsDel, debounce, nowMs, todayKey, deepClone, notifyLocal, sfx, requestNotifPermission, faNum } from "./util.js";
-import { newState, computePower, tickState, maxEnergy, STATE_VERSION, missionBucket, applyProgress, dailyQuests } from "./engine.js";
+import { el, lsGet, lsSet, lsDel, debounce, nowMs, todayKey, deepClone, notifyLocal, sfx, requestNotifPermission, faNum, initMute } from "./util.js";
+import { newState, computePower, tickState, maxEnergy, STATE_VERSION, missionBucket, applyProgress, dailyQuests, regenEnergy } from "./engine.js";
 import { hunterClass } from "./data.js";
 import { MISSION_INTERVAL_MS, missionOf } from "./data.js";
 import * as cloud from "./cloud.js";
@@ -20,6 +20,9 @@ function loadLocalState() {
   if (raw) { // مهاجرت نسخه‌های قدیمی — هیچ‌وقت داده حذف نمی‌شود
     raw.v = STATE_VERSION;
     raw.gold = raw.gold || 0;
+    if (raw.rank_pts == null) raw.rank_pts = 1000;
+    if (!raw.login) raw.login = { date: "", streak: 0 };
+    if (!raw.buffs) raw.buffs = [];
     return raw;
   }
   return null;
@@ -237,9 +240,7 @@ function tickAndRender() {
 setInterval(() => {
   if (!st || !ui.ready()) return;
   // انرژی
-  const cap = maxEnergy(st.level);
-  if (st.energy < cap) {
-    st.energy = Math.min(cap, st.energy + 1);
+  if (regenEnergy(st) > 0) {
     save();
     if (document.querySelector(".page.active")?.dataset.page === "home") ui.renderTopbar();
   }
@@ -350,6 +351,7 @@ document.addEventListener("visibilitychange", () => {
 window.addEventListener("beforeunload", () => { try { if (st) lsSet(stateKey(), st); } catch (e) {} });
 window.addEventListener("online", () => { ui.toast("اینترنت برگشت — در حال همگام‌سازی...", "good"); if (account) saveNow(); });
 
+initMute();
 startBgFX();
 requestNotifPermission();
 autoLogin();

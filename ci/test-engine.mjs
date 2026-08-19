@@ -6,7 +6,8 @@ import {
   unlockSkill, meetsReq, toggleSkill, MAX_ACTIVE_SKILLS, skillUnlocked,
   assignShadow, extractShadow, activeMissions, applyProgress, claimMission,
   dailyQuests, claimDailyQuest, applyPunishment, activeDebuffs, tickState, yearState,
-  claimYearDay, currentPicks, takePick, addRewardPick, missionBucket, calcDamage, newShadow, dailyDeals
+  claimYearDay, currentPicks, takePick, addRewardPick, missionBucket, calcDamage, newShadow, dailyDeals,
+  claimDailyLogin, unlockTitles, addRankPts, regenEnergy, addBuff, activeBuffs
 } from "../src/js/engine.js";
 import {
   dungeonIndex, bossIndex, skillIndex, DUNGEON_COUNT, BOSS_COUNT, SKILL_COUNT,
@@ -237,6 +238,40 @@ t("ماموریت‌های روزانهٔ اجباری تولید و دریاف�
   applyProgress(st, q.type, q.n + 5);
   const r = claimDailyQuest(st, q.id);
   assert.ok(r.ok && r.gold > 0);
+});
+t("ورود روزانه: جایزه و زنجیره", () => {
+  const st = newState("t", "s");
+  const r = claimDailyLogin(st);
+  assert.ok(r.ok && r.streak === 1 && r.gold > 0);
+  const gold = st.gold;
+  const r2 = claimDailyLogin(st);
+  assert.ok(r2.already && st.gold === gold, "دوباره در همان روز نمی‌شود");
+});
+t("امتیاز رنک و عنوان‌ها", () => {
+  const st = newState("t", "s");
+  assert.equal(st.rank_pts, 1000);
+  addRankPts(st, 25);
+  assert.equal(st.rank_pts, 1025);
+  addRankPts(st, -2000);
+  assert.equal(st.rank_pts, 0);
+  st.level = 5;
+  unlockTitles(st);
+  assert.ok(st.titles["شکارچی تازه‌کار"]);
+});
+t("معجون باف و انرژی آفلاین", () => {
+  const st = newState("t", "s");
+  const pot = SHOP_ITEMS.find((x) => x.effects.rage);
+  addItem(st, pot.id, 1);
+  const r = useItem(st, pot.id);
+  assert.ok(r.ok, r.error);
+  assert.ok(activeBuffs(st).some((b) => b.k === "atk"));
+  const p0 = computePower(st);
+  addBuff(st, "atk", 50, 60000);
+  assert.ok(computePower(st) > p0, "باف قدرت می‌دهد");
+  st.energy = 1;
+  st.energyAt = Date.now() - 120000;
+  const g = regenEnergy(st);
+  assert.ok(g >= 3 && st.energy > 1, "انرژی آفلاین: " + g);
 });
 
 console.log(`\n=== نتیجه: ${passed} موفق، ${failed} ناموفق ===`);

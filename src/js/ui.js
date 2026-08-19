@@ -1,7 +1,8 @@
 /* ================= رابط کاربری ================= */
 import {
   el, make, esc, faNum, fmt, fmtNum, dur, timeAgo, todayKey, weekKey, nowMs,
-  debounce, lsGet, lsSet, sfx, notifyLocal, vibrate, sleep, pick as pickArr, clamp
+  debounce, lsGet, lsSet, sfx, notifyLocal, vibrate, sleep, pick as pickArr, clamp,
+  setMuted, isMuted
 } from "./util.js";
 import {
   xpNeed, maxEnergy, combatStats, computePower, doTrain, addXP, gainGold, addItem,
@@ -9,7 +10,7 @@ import {
   unlockSkill, meetsReq, toggleSkill, MAX_ACTIVE_SKILLS, skillUnlocked,
   assignShadow, activeMissions, applyProgress, claimMission, dailyQuests, claimDailyQuest,
   applyPunishment, activeDebuffs, tickState, yearState, claimYearDay, currentPicks, takePick,
-  missionBucket, dailyDeals,
+  missionBucket, dailyDeals, addRankPts, activeBuffs,
 } from "./engine.js";
 import {
   dungeonIndex, bossIndex, skillIndex, DUNGEON_COUNT, BOSS_COUNT, SKILL_COUNT,
@@ -160,7 +161,10 @@ export function renderTopbar() {
 }
 
 let comboResetTimer = null;
+let trainBound = false;
 function bindTrain() {
+  if (trainBound) return;
+  trainBound = true;
   const btn = $("btn-train");
   const click = () => {
     const st = app.getSt();
@@ -213,9 +217,6 @@ function confetti() {
     layer.appendChild(p);
     setTimeout(() => p.remove(), 3000);
   }
-  const st = document.createElement("style");
-  st.textContent = "@keyframes confFall{to{transform:translateY(105vh) rotate(540deg);opacity:0}}";
-  document.head.appendChild(st);
 }
 
 function renderDailyQuests() {
@@ -309,12 +310,69 @@ function renderPunishments() {
   box.innerHTML = debHtml + history || "<p>هنوز مجازاتی نداشتی — کارها را انجام بده!</p>";
 }
 
+function renderHomeStats() {
+  const st = app.getSt();
+  const box = $("home-stats");
+  if (!box) return;
+  const items = [
+    [fmtNum(st.stats.clicks || 0), "تمرین"],
+    [fmtNum(st.stats.kills || 0), "کشته"],
+    [fmtNum(st.stats.dungeons || 0), "دانجن"],
+    [fmtNum(Object.keys(st.shadows || {}).length), "سایه"],
+    [fmtNum(st.stats.wins || 0), "برد"],
+    [fmtNum(st.rank_pts ?? 1000), "رنک"],
+  ];
+  box.innerHTML = items.map(([v, l]) => `<div class="hs-item"><b>${v}</b><span>${l}</span></div>`).join("");
+}
+function renderBuffs() {
+  const st = app.getSt();
+  const box = $("buff-strip");
+  if (!box) return;
+  const names = { atk: "حمله", def: "دفاع", crit: "کریت", haste: "سرعت", xp: "XP", gold: "طلا", vamp: "خون‌آشام", extract: "سایه", regen: "بازیابی", hp: "جان" };
+  box.innerHTML = activeBuffs(st).map((b) => `<span class="buff-chip">${names[b.k] || b.k} +${faNum(b.pct)}٪ · ${dur(b.until - nowMs())}</span>`).join("");
+}
+
 export function renderHome() {
   renderTopbar();
+  renderHomeStats();
+  renderBuffs();
+  maybeDailyLogin();
+  maybeIntro();
   renderDailyQuests();
   renderYearQuest();
   renderRewardPicks();
   renderPunishments();
+}
+
+function maybeIntro() {
+  const st = app.getSt();
+  if (st.seenIntro) return;
+  st.seenIntro = true;
+  app.save();
+  sysWindow(`<div class="sys-row"><span>سیستم</span><b>فعال شد</b></div>
+    <p>تو انتخاب شدی. از این لحظه هر کلیک، هر دروازه و هر شکست ثبت می‌شود.</p>
+    <p>ماموریت‌های اجباری را انجام بده. اگر نشکنی، سیستم مجازات می‌کند.</p>
+    <p style="color:#c2aeff">ارتش سایه‌ات را بساز. پادشاه سایه‌ها منتظر است.</p>`, "gold");
+}
+
+function maybeDailyLogin() {
+  const st = app.getSt();
+  if (st.pendingLogin) {
+    const r = st.pendingLogin;
+    st.pendingLogin = null;
+    app.save();
+    sysWindow(`<div class="sys-row"><span>ورود روزانه</span><b>روز ${faNum(r.streak)}</b></div>
+      <div class="sys-row"><span>طلا</span><b>+${fmtNum(r.gold)}</b></div>
+      <div class="sys-row"><span>تجربه</span><b>+${fmtNum(r.xp)}</b></div>
+      <div class="sys-row"><span>جواهر</span><b>+${faNum(r.gems)}</b></div>
+      <p>هر روز برگرد تا زنجیره‌ات نشکند.</p>`, "gold");
+    toast(`ورود روزانه: زنجیره ${faNum(r.streak)} روز`, "gold", 3200);
+  }
+  if (st.pendingTitles && st.pendingTitles.length) {
+    const t = st.pendingTitles.shift();
+    toast(`عنوان جدید: ${t}`, "gold", 3600);
+    app.save();
+  }
 }
 
 /* ================= ماموریت‌ها ================= */
@@ -417,12 +475,18 @@ export function renderGates() {
       $("gate-filters").appendChild(b);
     });
   }
+  const q = (($("gate-search") && $("gate-search").value) || "").trim();
+  if ($("gate-search") && !$("gate-search")._bound) {
+    $("gate-search")._bound = true;
+    $("gate-search").addEventListener("input", debounce(() => { gateShown = 30; renderGates(); }, 180));
+  }
   const box = $("gate-list");
   box.innerHTML = "";
   let shown = 0, total = 0;
   for (let i = 0; i < DUNGEON_COUNT && shown < gateShown; i++) {
     const d = dungeonIndex(i);
     if (gateFilter !== "all" && d.rank.key !== gateFilter) continue;
+    if (q && !(`${d.name} ${d.monster}`).includes(q)) continue;
     total++;
     if (++shown > gateShown) break;
     const locked = st.level < d.level;
@@ -495,12 +559,18 @@ export function renderBosses() {
     });
   }
   const st = app.getSt();
+  const q = (($("boss-search") && $("boss-search").value) || "").trim();
+  if ($("boss-search") && !$("boss-search")._bound) {
+    $("boss-search")._bound = true;
+    $("boss-search").addEventListener("input", debounce(() => { bossShown = 30; renderBosses(); }, 180));
+  }
   const box = $("boss-list");
   box.innerHTML = "";
   let shown = 0;
   for (let i = 0; i < BOSS_COUNT && shown < bossShown; i++) {
     const b = bossIndex(i);
     if (bossFilter !== "all" && b.rank.key !== bossFilter) continue;
+    if (q && !b.name.includes(q)) continue;
     shown++;
     const killed = st.bosses && st.bosses[i] && st.bosses[i].killed;
     const tooStrong = st.level + 15 < b.level;
@@ -764,7 +834,8 @@ function renderItems(box) {
     const equippedW = st.equip.weapon === it.id;
     const equippedA = st.equip.armor === it.id;
     const equippedT = st.equip.titleItem === it.id;
-    const usable = it.effects.energy != null || it.effects.xp != null || it.effects.gold != null || it.effects.protect != null || it.effects.box != null || it.effects.rerollShop != null || it.effects.punishShield != null || it.effects.fullEnergy != null || it.effects.duelTicket != null;
+    const fx = it.effects;
+    const usable = fx.energy != null || fx.xp != null || fx.gold != null || fx.protect != null || fx.box != null || fx.rerollShop != null || fx.punishShield != null || fx.fullEnergy != null || fx.duelTicket != null || fx.rage != null || fx.haste != null || fx.focus != null || fx.luck != null || fx.def != null || fx.atk != null || fx.vamp != null || fx.regen != null || fx.greed != null || fx.shadow != null || fx.yearBoost != null || fx.chatColor != null || fx.sysBell != null || fx.secretKey != null;
     const row = make(`<div class="inv-item">
       <div class="item-ico">${it.icon}</div>
       <div class="skill-info">
@@ -1035,6 +1106,7 @@ function startDuelSession(duelId, mode, isHost, me, opp, duelRow) {
     if (res.won) {
       st.stats.wins++;
       applyProgress(st, "duels", 1);
+      addRankPts(st, 18 + Math.floor(st.level / 5));
       const g = 100 + st.level * 35;
       gainGold(st, g);
       addXP(st, 300 + st.level * 60);
@@ -1244,6 +1316,7 @@ $("btn-emoji").addEventListener("click", () => {
 /* پیام صوتی */
 $("btn-voice-msg").addEventListener("click", () => {
   if (!navigator.mediaDevices || !window.MediaRecorder) return toast("مرورگرت ضبط صدا ندارد", "bad");
+  if (recording && recorder && recorder.state === "recording") { recorder.stop(); return; }
   if (recording) return;
   navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
     recording = true;
@@ -1273,8 +1346,6 @@ $("btn-voice-msg").addEventListener("click", () => {
     recorder.start();
     recorder.timer = setTimeout(() => { if (recorder && recorder.state === "recording") recorder.stop(); }, 30000);
   }).catch(() => toast("دسترسی میکروفون رد شد", "bad"));
-  // بار دوم = توقف
-  if (recorder && recorder.state === "recording") recorder.stop();
 });
 /* صحبت زنده (واکی‌تاکی) */
 const pushBtn = $("btn-voice-push");

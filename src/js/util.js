@@ -95,8 +95,16 @@ export function lsDel(key) {
 // ---------- debounce ----------
 export function debounce(fn, ms) {
   let t = null;
-  const wrapped = (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
-  wrapped.cancel = () => clearTimeout(t);
+  let lastArgs = null;
+  const wrapped = (...args) => {
+    lastArgs = args;
+    clearTimeout(t);
+    t = setTimeout(() => { t = null; fn(...args); }, ms);
+  };
+  wrapped.cancel = () => { clearTimeout(t); t = null; };
+  wrapped.flush = () => {
+    if (t) { clearTimeout(t); t = null; if (lastArgs) fn(...lastArgs); }
+  };
   return wrapped;
 }
 
@@ -107,7 +115,13 @@ function ctx() {
   if (actx && actx.state === "suspended") actx.resume().catch(() => {});
   return actx;
 }
+let muted = false;
+export function setMuted(v) { muted = !!v; try { lsSet("muted", muted); } catch (e) {} }
+export function isMuted() { return muted; }
+export function initMute() { try { muted = !!lsGet("muted"); } catch (e) { muted = false; } }
+
 function tone(freq, dur, type = "sine", vol = 0.12, slide = 0, delay = 0) {
+  if (muted) return;
   const c = ctx(); if (!c) return;
   try {
     const t0 = c.currentTime + delay;
