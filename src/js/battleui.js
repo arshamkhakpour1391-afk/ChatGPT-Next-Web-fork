@@ -458,12 +458,25 @@ export function usePotion(itemId) {
   if (!b || b.over) return { error: "نبرد تمام شده" };
   if (b.potionCd > nowMs()) return { error: "کمی صبر کن" };
   const it = itemById(itemId);
-  if (!it || !it.effects.heal) return { error: "فقط معجون جان اینجا کار می‌کند" };
+  if (!it) return { error: "آیتم پیدا نشد" };
+  const fx = it.effects || {};
+  if (!(fx.heal || fx.ult || fx.parry)) return { error: "این معجون اینجا کار نمی‌کند" };
   const has = b.cfg.consumeItem(itemId, 1);
   if (!has) return { error: "معجون نداری" };
   b.potionCd = nowMs() + 1500;
-  heal(Math.floor(b.player.maxHp * it.effects.heal / 100));
-  addLog(`${it.name}: جان بازیابی شد`, "l-good");
+  if (fx.heal) {
+    heal(Math.floor(b.player.maxHp * fx.heal / 100));
+    addLog(`${it.name}: جان بازیابی شد`, "l-good");
+  }
+  if (fx.ult) {
+    b.ult = 100;
+    addLog(`${it.name}: فرمان سایه آماده شد`, "l-gold");
+    updateHud();
+  }
+  if (fx.parry) {
+    b.perfectNext = true;
+    addLog(`${it.name}: بلوک بعدی پاری کامل است`, "l-info");
+  }
   sfx.coin();
   return { ok: true };
 }

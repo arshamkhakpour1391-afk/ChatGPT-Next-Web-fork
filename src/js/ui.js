@@ -108,6 +108,9 @@ export function switchPage(name, silent) {
   if (!name || name === currentPage && silent) {
     if (name === currentPage) { renderPage(name); return; }
   }
+  if (currentPage === "duel" && name !== "duel") {
+    try { clearInterval(onlinePoll); onlinePoll = null; } catch (e) {}
+  }
   currentPage = name;
   document.querySelectorAll(".page").forEach((p) => {
     const on = p.dataset.page === name;
@@ -172,8 +175,10 @@ function bindTrain() {
   if (trainBound) return;
   trainBound = true;
   const btn = $("btn-train");
-  const click = () => {
+  const click = (ev) => {
+    if (ev && ev.preventDefault) ev.preventDefault();
     const st = app.getSt();
+    if (!st) return;
     const evt = doTrain(st);
     sfx.click();
     vibrate(12);
@@ -603,18 +608,30 @@ export function renderGates() {
   const box = $("gate-list");
   box.innerHTML = "";
   let shown = 0, total = 0;
+  const match = (d) => {
+    if (gateFilter !== "all" && d.rank.key !== gateFilter) return false;
+    if (gateArch !== "all" && d.archetype && d.archetype.key !== gateArch) return false;
+    if (q && !(`${d.name} ${d.monster} ${d.archetype?.name || ""} ${d.element || ""}`).includes(q)) return false;
+    return true;
+  };
   const order = [];
-  for (let i = 0; i < DUNGEON_COUNT; i++) {
-    const d = dungeonIndex(i);
-    if (gateFilter !== "all" && d.rank.key !== gateFilter) continue;
-    if (gateArch !== "all" && d.archetype && d.archetype.key !== gateArch) continue;
-    if (q && !(`${d.name} ${d.monster} ${d.archetype?.name || ""} ${d.element || ""}`).includes(q)) continue;
-    order.push(d);
+  const need = gateShown + 1;
+  if (gateSort === "gold" || gateSort === "done") {
+    const start = Math.max(0, (st.level - 8) * 10);
+    const end = Math.min(DUNGEON_COUNT, start + 500);
+    for (let i = start; i < end; i++) {
+      const d = dungeonIndex(i);
+      if (match(d)) order.push(d);
+    }
+    if (gateSort === "gold") order.sort((a, b) => b.gold - a.gold);
+    else order.sort((a, b) => ((st.dungeons && st.dungeons[b.i]) ? 1 : 0) - ((st.dungeons && st.dungeons[a.i]) ? 1 : 0));
+  } else {
+    for (let i = 0; i < DUNGEON_COUNT && order.length < need; i++) {
+      const d = dungeonIndex(i);
+      if (match(d)) order.push(d);
+    }
+    if (gateSort === "open") order.sort((a, b) => (st.level >= a.level ? 0 : 1) - (st.level >= b.level ? 0 : 1) || a.level - b.level);
   }
-  if (gateSort === "gold") order.sort((a, b) => b.gold - a.gold);
-  else if (gateSort === "open") order.sort((a, b) => (st.level >= a.level ? 0 : 1) - (st.level >= b.level ? 0 : 1) || a.level - b.level);
-  else if (gateSort === "done") order.sort((a, b) => ((st.dungeons && st.dungeons[b.i]) ? 1 : 0) - ((st.dungeons && st.dungeons[a.i]) ? 1 : 0));
-  else order.sort((a, b) => a.level - b.level);
   for (const d of order) {
     if (shown >= gateShown) break;
     const i = d.i;
@@ -921,6 +938,13 @@ function buyFromShop(itemId, deal) {
 let bagTab = "skills";
 export function renderBag() {
   const st = app.getSt();
+  if ($("skill-search")) {
+    $("skill-search").classList.toggle("hidden", bagTab !== "skills");
+    if ($("skill-search") && !$("skill-search")._bound) {
+      $("skill-search")._bound = true;
+      $("skill-search").addEventListener("input", debounce(() => renderBag(), 160));
+    }
+  }
   if (!$("bag-tabs").children.length) {
     [["skills", "✨ مهارت‌ها"], ["items", "🎒 آیتم‌ها"], ["shadows", "🌑 سایه‌ها"], ["gear", "🛡️ تجهیزات"]].forEach(([k, label]) => {
       const b = make(`<button class="b-tab ${k === bagTab ? "active" : ""}" data-bt="${k}">${label}</button>`);
@@ -946,13 +970,15 @@ function renderSkills(box) {
   const active = st.equip.active;
   const shown = active.length ? `<div class="chip chip-green" style="margin-bottom:2px">${faNum(active.length)}/${faNum(MAX_ACTIVE_SKILLS)} مهارت فعال</div>` : "";
   box.innerHTML = shown;
+  const sq = (($("skill-search") && $("skill-search").value) || "").trim();
   let count = 0;
   for (let i = 0; i < SKILL_COUNT && count < 120; i++) {
     const sk = skillIndex(i);
     const unlocked = skillUnlocked(st, i);
     const equipped = active.includes(i);
-    if (!unlocked && i > 40) continue; // فقط چند مهارت نزدیک نشان بده
-    if (!unlocked && !meetsReq(st, sk.req) && i > 12) continue;
+    if (sq && !(`${sk.name} ${sk.desc} ${sk.type?.name || ""}`).includes(sq)) continue;
+    if (!sq && !unlocked && i > 40) continue;
+    if (!sq && !unlocked && !meetsReq(st, sk.req) && i > 12) continue;
     count++;
     const card = make(`<div class="skill-card ${unlocked ? "" : "locked"} ${equipped ? "equipped" : ""}">
       <div class="skill-ico">${sk.icon}</div>
@@ -1498,12 +1524,14 @@ function sendChat() {
   const inp = $("chat-text");
   const txt = inp.value.trim();
   if (!txt) return;
-  if (!app.isLoggedIn()) {
-    // حالت آفلاین: پیام فقط همین‌جا دیده می‌شود
+  const localOnly = !app.isLoggedIn() || (app.isCloud && !app.isCloud());
+  if (localOnly) {
     inp.value = "";
-    const msg = { room: chatRoom, username: app.getSt().username, userId: "local", body: txt, kind: "text", created_at: nowMs() };
+    const msg = { room: chatRoom, username: app.getSt().username, userId: app.myUserId() || "local", body: txt, kind: "text", created_at: nowMs() };
     appendChatMsg(msg);
-    toast("آفلاین هستی — پیامت فقط روی همین دستگاه دیده می‌شود", "bad", 3000);
+    applyProgress(app.getSt(), "chat", 1);
+    app.save();
+    if (!app.isLoggedIn()) toast("آفلاین هستی — پیامت فقط روی همین دستگاه دیده می‌شود", "info", 2600);
     return;
   }
   inp.value = "";
@@ -1836,7 +1864,7 @@ async function doAuth() {
   try {
     cloud.initCloud?.();
     const locals = lsGet("local_accounts") || {};
-    if (authTab === "login" && locals[user] && locals[user].pass === pass) {
+    if (locals[user] && locals[user].pass === pass) {
       const local = localAuthFallback("login", user, pass);
       await app.onAuthed(local, pass);
       cloud.login(user, pass).then((cr) => {

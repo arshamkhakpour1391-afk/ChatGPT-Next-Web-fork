@@ -126,6 +126,10 @@ async function autoLogin() {
       ui.toast("برای ذخیرهٔ ابری، ثبت‌نام کن یا وارد شو", "info", 4000);
       return;
     }
+    if (String(acc.token || "").startsWith("local-") || String(acc.userId).startsWith("loc_")) {
+      bootLocal(acc);
+      return;
+    }
     cloud.setSession(acc.token);
     window.__sls_userId = acc.userId;
     const r = await cloud.loadPlayer(acc.userId);
@@ -346,6 +350,7 @@ const appObj = {
   save: () => save(),
   saveNow: () => saveNow(),
   isLoggedIn: () => !!account && !offlineMode,
+  isCloud: () => !!(account && !offlineMode && account.token && !String(account.token).startsWith("local-") && !String(account.userId || "").startsWith("loc_")),
   myUserId: () => account?.userId || null,
   onAuthed,
   onOfflineMode,
