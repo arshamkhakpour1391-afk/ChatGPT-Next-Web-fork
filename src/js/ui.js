@@ -35,6 +35,7 @@ const $ = (id) => el(id);
 /* ---------- توست ---------- */
 export function toast(msg, type = "info", ms = 2600) {
   const wrap = $("toasts");
+  if (!wrap) return;
   const t = make(`<div class="toast ${type}"><span>${esc(msg)}</span></div>`);
   wrap.appendChild(t);
   setTimeout(() => { t.style.opacity = "0"; t.style.transition = "opacity .3s"; setTimeout(() => t.remove(), 320); }, ms);
@@ -103,11 +104,18 @@ $("btn-notifs")?.addEventListener("click", () => {
 /* ---------- سوییچ تب ---------- */
 let currentPage = "home";
 export function switchPage(name, silent) {
+  if (!name || name === currentPage && silent) {
+    if (name === currentPage) { renderPage(name); return; }
+  }
   currentPage = name;
-  document.querySelectorAll(".page").forEach((p) => p.classList.toggle("active", p.dataset.page === name));
+  document.querySelectorAll(".page").forEach((p) => {
+    const on = p.dataset.page === name;
+    p.classList.toggle("active", on);
+    if (on) { p.classList.remove("page-in"); void p.offsetWidth; p.classList.add("page-in"); }
+  });
   document.querySelectorAll(".nav-btn").forEach((b) => b.classList.toggle("active", b.dataset.page === name));
-  $("pages").scrollTop = 0;
-  renderPage(name);
+  if ($("pages")) $("pages").scrollTop = 0;
+  try { renderPage(name); } catch (e) { console.warn(e); toast("این تب یک لحظه خطا داد — دوباره بزن", "bad"); }
   if (!silent) sfx.click();
 }
 function renderPage(name) {
@@ -124,25 +132,18 @@ function renderPage(name) {
   }
 }
 document.querySelectorAll(".nav-btn").forEach((b) => {
-  b.addEventListener("click", () => switchPage(b.dataset.page));
+  b.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    switchPage(b.dataset.page);
+  });
 });
-// سوایپ بین تب‌ها
-let swipeX = 0;
-const PAGES_ORDER = ["home", "missions", "gates", "battle", "shop", "bag", "duel", "chat", "ranks"];
-$("pages")?.addEventListener("touchstart", (e) => { swipeX = e.touches[0].clientX; }, { passive: true });
-$("pages")?.addEventListener("touchend", (e) => {
-  if (currentPage === "chat") return;
-  const dx = e.changedTouches[0].clientX - swipeX;
-  if (Math.abs(dx) > 70) {
-    const idx = PAGES_ORDER.indexOf(currentPage);
-    const next = dx < 0 ? Math.min(PAGES_ORDER.length - 1, idx + 1) : Math.max(0, idx - 1);
-    if (next !== idx) switchPage(PAGES_ORDER[next]);
-  }
-});
+// سوایپ تب‌ها عمداً خاموش است — اسکرول لیست و کلیک سریع نباید تب را عوض کند
 
 /* ================= هدر و خانه ================= */
 export function renderTopbar() {
-  const st = app.getSt();
+  const st = app && app.getSt && app.getSt();
+  if (!st) return;
   const hc = hunterClass(st.level);
   $("avatar-letter").textContent = (st.username || "ش").charAt(0).toUpperCase();
   $("hunter-name").textContent = st.username || "—";
@@ -175,10 +176,10 @@ function bindTrain() {
     const evt = doTrain(st);
     sfx.click();
     vibrate(12);
-    // عدد آسیب
+    btn.classList.remove("hit-pop"); void btn.offsetWidth; btn.classList.add("hit-pop");
     const zone = $("dmg-zone");
     if (zone) {
-      const pop = make(`<div class="dmg-pop ${evt.crit ? "crit" : ""}">+${faNum(evt.xp)}</div>`);
+      const pop = make(`<div class="dmg-pop ${evt.crit ? "crit" : ""}">+${faNum(evt.xp)}${evt.gold ? " · 🪙" + faNum(evt.gold) : ""}</div>`);
       pop.style.top = (20 + Math.random() * 55) + "%";
       pop.style.right = (15 + Math.random() * 60) + "%";
       zone.appendChild(pop);
@@ -338,7 +339,9 @@ function renderBuffs() {
 }
 
 export function renderHome() {
+  if (!app || !app.getSt || !app.getSt()) return;
   renderTopbar();
+  renderQuick();
   renderHomeStats();
   renderBuffs();
   maybeDailyLogin();
@@ -351,6 +354,55 @@ export function renderHome() {
   renderPunishments();
 }
 
+function renderQuick() {
+  const box = $("quick-row");
+  if (!box) return;
+  const st = app.getSt();
+  const cx = codexStats(st);
+  box.innerHTML = "";
+  const mk = (lab, fn) => {
+    const b = make(`<button class="btn btn-ghost btn-sm">${lab}</button>`);
+    b.addEventListener("click", fn);
+    box.appendChild(b);
+  };
+  mk("⚔️ تمرین مبارزه", () => startDummy());
+  mk("⚙️ تجهیز خودکار", () => {
+    const r = autoEquipBest(app.getSt());
+    toast(r.weapon || r.armor ? "بهترین تجهیزات پوشیده شد" : "چیزی برای تجهیز نبود", "good");
+    app.save(); renderTopbar();
+  });
+  mk("🎁 دریافت همه", () => {
+    const n = claimAllReady(app.getSt());
+    toast(n ? `${faNum(n)} جایزه گرفته شد` : "چیزی آماده نیست", n ? "gold" : "info");
+    app.save(); renderHome();
+  });
+  mk(`📒 کدکس ${faNum(cx.dungeons)}/${faNum(cx.bosses)}`, () => {
+    modal({
+      title: "کدکس شکارچی",
+      body: `<div class="m-meta"><span>دروازهٔ پاک‌شده</span><b>${faNum(cx.dungeons)}</b></div>
+        <div class="m-meta"><span>باس کشته</span><b>${faNum(cx.bosses)}</b></div>
+        <div class="m-meta"><span>سایه‌ها</span><b>${faNum(cx.shadows)}</b></div>
+        <p>اولین پاکسازی هر دروازه جایزهٔ بیشتر می‌دهد.</p>`,
+      actions: [{ label: "بستن", cb() {} }]
+    });
+  });
+}
+function startDummy() {
+  const st = app.getSt();
+  if (isFighting()) return;
+  openBattle({
+    mode: "dummy",
+    src: { name: "مترسک تمرین", hp: 500 + st.level * 90, atk: 6, def: 3, emoji: "🎯", skills: [], gold: 0, xp: 0, essenceChance: 0, rank: { name: "تمرین" } },
+    st, toast,
+    save: () => app.save(),
+    consumeItem: (id, n) => consumeItem(st, id, n),
+    applyProgress: () => {},
+    onSkillUsed: () => applyProgress(st, "skills", 1),
+    onWin: () => toast("تمرین تمام شد.", "good"),
+    onLose: () => toast("مترسک زدتت.", "bad"),
+    onExit: () => {},
+  });
+}
 function renderFeatured() {
   const box = $("featured-body");
   if (!box) return;
@@ -557,7 +609,7 @@ export function renderGates() {
       <div class="rank-ico ${d.rank.cls}"><b>${d.rank.key}</b><span>سطح ${faNum(d.level)}</span></div>
       <div class="gate-info">
         <div class="gate-name">${esc(d.name)} ${cleared ? "✓" : ""}</div>
-        <div class="gate-sub">${esc(d.monster)} · ${faNum(d.waves)} موج · قدرت دشمن ${fmtNum(d.enemyPower)}</div>
+        <div class="gate-sub">${esc(d.monster)} · ${d.archetype ? esc(d.archetype.name) + " · " : ""}${d.element ? esc(d.element) + " · " : ""}${faNum(d.waves)} موج</div>
         <div class="gate-rew">🏆 ${fmtNum(d.gold)} طلا · ${fmtNum(d.xp)} XP · شانس سایه ${faNum(Math.floor(d.essenceChance * 100))}٪</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:4px">
@@ -665,7 +717,7 @@ export function renderBosses() {
       <div class="rank-ico ${b.rank.cls}"><b>${b.rank.key}</b><span>سطح ${faNum(b.level)}</span></div>
       <div class="boss-info">
         <div class="boss-name">${b.emoji} ${esc(b.name)} ${killed ? "✓" : ""}</div>
-        <div class="boss-sub">جان ${fmtNum(b.hp)} · حمله ${fmtNum(b.atk)} · ${esc(b.skills.map((s) => s.name).join("، "))}</div>
+        <div class="boss-sub">${b.archetype ? esc(b.archetype.name) + " · " : ""}${b.element ? esc(b.element) + " · " : ""}جان ${fmtNum(b.hp)} · ${esc(b.skills.map((s) => s.name).join("، "))}</div>
         <div class="gate-rew">🏆 ${fmtNum(b.gold)} طلا · ${fmtNum(b.xp)} XP · شانس سایه ${faNum(Math.floor(b.essenceChance * 100))}٪</div>
       </div>
       <button class="btn ${tooStrong ? "btn-ghost" : "btn-red"} btn-sm gate-go" data-b="${i}">${killed ? "دوباره" : "مبارزه!"}</button>
@@ -1706,6 +1758,18 @@ document.querySelectorAll(".auth-tab").forEach((b) => b.addEventListener("click"
   $("auth-submit").textContent = authTab === "login" ? "ورود به سیستم" : "ساخت حساب جدید";
   $("auth-err").textContent = "";
 }));
+function localAuthFallback(mode, user, pass) {
+  const db = lsGet("local_accounts") || {};
+  if (mode === "register") {
+    if (db[user]) return { error: "این نام کاربری از قبل روی دستگاه ثبت شده" };
+    const userId = "loc_" + user + "_" + Math.abs((user + pass).split("").reduce((h, c) => ((h << 5) - h) + c.charCodeAt(0), 0));
+    db[user] = { pass, userId };
+    lsSet("local_accounts", db);
+    return { token: "local-" + userId, user_id: userId, username: user, player: null };
+  }
+  if (!db[user] || db[user].pass !== pass) return { error: "نام کاربری یا رمز عبور اشتباه است" };
+  return { token: "local-" + db[user].userId, user_id: db[user].userId, username: user, player: null };
+}
 $("auth-form").addEventListener("submit", (e) => {
   e.preventDefault();
   doAuth();
@@ -1732,22 +1796,19 @@ export function showAuth(errMsg) {
   $("screen-auth").classList.remove("hidden");
   $("screen-app").classList.add("hidden");
   if (errMsg) $("auth-err").textContent = errMsg;
-  // پر کردن نام ذخیره‌شده
   const acc = lsGet("account");
-  if (acc && acc.username) {
-    $("auth-user").value = acc.username;
-    $("auth-note").innerHTML = `حساب ذخیره‌شده: <b>${esc(acc.username)}</b> — فقط رمز را بزن و وارد شو. (نام کاربری تا آخر همین می‌ماند)`;
-  } else {
-    $("auth-note").textContent = "نام کاربری برای همیشه می‌ماند — خوب انتخاب کن.";
-  }
+  const base = (acc && acc.username)
+    ? `حساب ذخیره‌شده: <b>${esc(acc.username)}</b> — فقط رمز را بزن و وارد شو.`
+    : "نام کاربری برای همیشه می‌ماند — خوب انتخاب کن.";
+  if (acc && acc.username && !$("auth-user").value) $("auth-user").value = acc.username;
+  $("auth-note").innerHTML = base;
   $("auth-offline").classList.remove("hidden");
   cloud.checkSchema().then((r) => {
-    if (!r.ok) {
-      $("auth-note").innerHTML += `<br><a href="#" id="auth-install" style="color:#ffd76b;font-weight:800">⚠️ دیتابیس ابری نصب نیست — برای فعال شدن آنلاین کلیک کن</a>`;
-      $("auth-install")?.addEventListener("click", (e2) => { e2.preventDefault(); showInstaller(); });
-    } else {
-      $("auth-note").innerHTML += `<br><span style="color:#6fffa8">دیتابیس ابری آماده است — ثبت‌نام کن تا همه آنلاین باشند.</span>`;
-    }
+    const extra = r.ok
+      ? `<br><span style="color:#6fffa8">دیتابیس ابری آماده است.</span>`
+      : `<br><a href="#" id="auth-install" style="color:#ffd76b;font-weight:800">⚠️ دیتابیس ابری نصب نیست — کلیک کن</a>`;
+    $("auth-note").innerHTML = base + extra;
+    $("auth-install")?.addEventListener("click", (e2) => { e2.preventDefault(); showInstaller(); });
   });
 }
 export function showApp() {

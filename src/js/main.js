@@ -1,6 +1,6 @@
 /* ================= نقطهٔ شروع برنامه ================= */
 import { el, lsGet, lsSet, lsDel, debounce, nowMs, todayKey, deepClone, notifyLocal, sfx, requestNotifPermission, faNum, initMute } from "./util.js";
-import { newState, computePower, tickState, maxEnergy, STATE_VERSION, missionBucket, applyProgress, dailyQuests, regenEnergy } from "./engine.js";
+import { newState, computePower, tickState, maxEnergy, STATE_VERSION, missionBucket, applyProgress, dailyQuests, regenEnergy, migrateState } from "./engine.js";
 import { hunterClass } from "./data.js";
 import { MISSION_INTERVAL_MS, missionOf } from "./data.js";
 import * as cloud from "./cloud.js";
@@ -13,11 +13,20 @@ let account = null; // {username, pass, token, userId}
 let offlineMode = false;
 
 /* ---------- ذخیره ---------- */
-function stateKey() { return "state:" + (account ? account.userId : offlineMode ? "guest" : "anon"); }
-function loadLocalState() {
-  const raw = lsGet(stateKey());
+function stateKey(id) {
+  if (id) return "state:" + id;
+  return "state:" + (account ? account.userId : offlineMode ? "guest" : "anon");
+}
+function loadLocalState(id) {
+  const raw = lsGet(stateKey(id));
   if (raw) return migrateState(raw);
   return null;
+}
+function pickRicher(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  const score = (s) => (s.level || 1) * 10000 + (s.stats?.clicks || 0) + (s.gold || 0);
+  return score(a) >= score(b) ? a : b;
 }
 const pushCloud = debounce(async () => {
   if (offlineMode || !account) return;
@@ -43,93 +52,117 @@ function saveNow() {
 }
 
 /* ---------- حساب ---------- */
-async function onAuthed(r) {
-  account = { username: r.username, pass: authPass, token: r.token, userId: r.user_id };
-  cloud.setSession(r.token);
-  window.__sls_userId = r.user_id;
-  lsSet("account", { ...account, pass: authPass });
-  lsSet("lastUser", account.userId);
+async function onAuthed(r, passFromForm) {
+  const uid = r.user_id || r.userId;
+  const uname = r.username;
+  const token = r.token;
+  if (!uid || !token || !uname) {
+    ui.toast("ورود ناقص بود — دوباره امتحان کن", "bad");
+    return;
+  }
+  const pw = passFromForm || authPass || "";
+  account = { username: uname, pass: pw, token, userId: uid };
+  cloud.setSession(token);
+  window.__sls_userId = uid;
+  lsSet("account", { username: uname, pass: pw, token, userId: uid });
+  lsSet("lastUser", uid);
   authPass = null;
 
-  // ادغام با ابر
-  const local = loadLocalState();
+  const named = loadLocalState(uid);
+  const guest = pickRicher(loadLocalState("guest"), loadLocalState("anon"));
+  let local = pickRicher(named, guest);
   const cloudPlayer = r.player;
   if (cloudPlayer && cloudPlayer.data && Object.keys(cloudPlayer.data).length) {
     const cloudUpdated = new Date(cloudPlayer.updated_at || 0).getTime();
     const localUpdated = local ? (local.updatedAt || 0) : 0;
     if (cloudUpdated >= localUpdated || !local) {
       st = migrateState(cloudPlayer.data);
-      st.username = r.username;
-      saveNow();
       ui.toast("داده‌های ابری بارگذاری شد ✓", "good");
     } else {
-      st = local;
-      saveNow();
+      st = migrateState(local);
       ui.toast("دادهٔ دستگاه جدیدتر بود — با ابر همگام شد ✓", "info");
     }
   } else if (local) {
-    st = local;
-    st.username = r.username;
-    saveNow();
+    st = migrateState(local);
   } else {
-    st = newState(r.username, r.user_id);
-    saveNow();
+    st = newState(uname, uid);
   }
+  st.username = uname;
+  st.v = STATE_VERSION;
   offlineMode = false;
+  saveNow();
   ui.initUI(appObj);
   ui.showApp();
   startOnlineServices();
   tickAndRender();
-  ui.toast(`خوش آمدی، ${r.username}! سیستم منتظر توست.`, "good", 3200);
+  ui.toast(`خوش آمدی، ${uname}! سیستم منتظر توست.`, "good", 3200);
   sfx.win();
 }
 
-async function autoLogin() {
-  const acc = lsGet("account");
-  const lastUser = lsGet("lastUser");
-  if (!acc) {
+function bootLocal(acc, msg) {
+  account = acc || null;
+  if (acc) {
+    cloud.setSession(acc.token);
+    window.__sls_userId = acc.userId;
+    st = loadLocalState(acc.userId) || loadLocalState("guest") || loadLocalState("anon") || newState(acc.username, acc.userId);
+    st.username = acc.username || st.username;
+    offlineMode = false;
+  } else {
     st = loadLocalState() || newState("", "anon");
-    showAuth();
-    ui.toast("برای ذخیرهٔ ابری، ثبت‌نام کن یا وارد شو", "info", 4000);
-    return;
   }
-  cloud.setSession(acc.token);
-  window.__sls_userId = acc.userId;
+  ui.initUI(appObj);
+  ui.showApp();
+  tickAndRender();
+  if (msg) ui.toast(msg, "info", 4200);
+}
+
+async function autoLogin() {
   try {
+    cloud.initCloud?.();
+    const acc = lsGet("account");
+    if (!acc || !acc.userId) {
+      st = loadLocalState() || newState("", "anon");
+      showAuth();
+      ui.toast("برای ذخیرهٔ ابری، ثبت‌نام کن یا وارد شو", "info", 4000);
+      return;
+    }
+    cloud.setSession(acc.token);
+    window.__sls_userId = acc.userId;
     const r = await cloud.loadPlayer(acc.userId);
     if (r.player) {
       account = acc;
-      st = migrateState(r.player.data && Object.keys(r.player.data).length ? r.player.data : (loadLocalState() || newState(acc.username, acc.userId)));
+      const cloudData = r.player.data && Object.keys(r.player.data).length ? r.player.data : null;
+      st = migrateState(cloudData || loadLocalState(acc.userId) || newState(acc.username, acc.userId));
       st.username = acc.username;
       saveNow();
       ui.initUI(appObj);
       ui.showApp();
       startOnlineServices();
       tickAndRender();
-      ui.toast(`خوش برگشتی، ${acc.username}! همه‌چیز از ابر بارگذاری شد ✓`, "good", 3200);
+      ui.toast(`خوش برگشتی، ${acc.username}!`, "good", 2800);
       return;
     }
-    if (r.error && r.error.message === "TIMEOUT") throw new Error("offline");
+    const timedOut = r.error && (r.error.message === "TIMEOUT" || r.error.message === "offline");
+    if (timedOut || (r.error && !acc.pass)) {
+      bootLocal(acc, "اتصال ابری برقرار نشد — با دادهٔ ذخیره‌شده ادامه می‌دهی");
+      return;
+    }
+    if (acc.pass) {
+      const r2 = await cloud.login(acc.username, acc.pass);
+      if (!r2.error && r2.token) {
+        await onAuthed(r2, acc.pass);
+        return;
+      }
+    }
+    bootLocal(acc, "نشست ابری تازه نشد — محلی بازی می‌کنی، بعداً دوباره وارد شو");
   } catch (e) {
-    // ادامهٔ آفلاین با دادهٔ محلی — بعداً همگام می‌شود
-    account = acc;
-    cloud.setSession(acc.token);
-    window.__sls_userId = acc.userId;
-    st = loadLocalState() || newState(acc.username, acc.userId);
-    ui.initUI(appObj);
-    ui.showApp();
-    tickAndRender();
-    ui.toast("اتصال ابری برقرار نشد — با دادهٔ ذخیره‌شده ادامه می‌دهی، بعداً همگام می‌شود", "bad", 5000);
-    return;
+    const acc = lsGet("account");
+    if (acc && acc.userId) bootLocal(acc, "خطا در ورود خودکار — دادهٔ محلی سالم است");
+    else {
+      st = loadLocalState() || newState("", "anon");
+      showAuth();
+    }
   }
-  // نشست منقضی: ورود خودکار با رمز ذخیره‌شده
-  const r2 = await cloud.login(acc.username, acc.pass);
-  if (!r2.error) {
-    authPass = acc.pass;
-    await onAuthed(r2);
-    return;
-  }
-  showAuth("نشست تمام شده — دوباره وارد شو");
 }
 
 let authPass = null;
@@ -140,6 +173,7 @@ function logout() {
   cloud.stopHeartbeat();
   account = null;
   offlineMode = false;
+  onlineStarted = false;
   lsDel("account");
   cloud.setSession(null);
   showAuth();
@@ -157,7 +191,10 @@ function onOfflineMode() {
 }
 
 /* ---------- سرویس‌های آنلاین ---------- */
+let onlineStarted = false;
 function startOnlineServices() {
+  if (!account || onlineStarted) return;
+  onlineStarted = true;
   cloud.joinPresence({
     userId: account.userId, username: st.username, level: st.level,
     power: computePower(st), hunterClass: hunterClass(st.level).name

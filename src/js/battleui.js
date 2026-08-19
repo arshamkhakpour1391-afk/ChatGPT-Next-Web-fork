@@ -100,7 +100,17 @@ function spawnWave() {
     hp = 500 + b.st.level * 90; atk = 4 + Math.floor(b.st.level * 0.4); def = 2;
     name = "مترسک تمرین"; emoji = "🎯"; skills = [];
   }
-  b.enemy = { hp, maxHp: hp, atk, def, name, emoji, skills, rage: false, phase: 1, atkT: nowMs() + 1600, windup: 0 };
+  const arch = !b.isDummy && src.archetype;
+  if (arch) {
+    hp = Math.max(1, Math.floor(hp * (arch.hp || 1)));
+    atk = Math.max(1, Math.floor(atk * (arch.atk || 1)));
+    def = Math.max(0, Math.floor(def * (arch.def || 1)));
+    name = `${name} · ${arch.name}`;
+    if (arch.key === "venom") skills = (skills || []).concat([{ name: "نیش زهر", mult: 1.15, cd: 8000, color: "#2eff7e", dot: true }]);
+    if (arch.key === "mage") skills = (skills || []).concat([{ name: "گلوله جادو", mult: 1.7, cd: 6500, color: "#7c5cff" }]);
+    if (arch.key === "summoner") skills = (skills || []).concat([{ name: "احضار سایه", mult: 1.25, cd: 9000, color: "#c07cff" }]);
+  }
+  b.enemy = { hp, maxHp: hp, atk, def, name, emoji, skills, rage: false, phase: 1, atkT: nowMs() + (arch && arch.key === "assassin" ? 900 : 1600), windup: 0, arch };
   b.enemyDebuffs = { frozen: 0, blind: 0, silence: 0, poison: { until: 0, dps: 0 } };
   el("enemy-sprite").textContent = emoji;
   el("enemy-name").textContent = name;

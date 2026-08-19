@@ -34,7 +34,7 @@ t("تمرین: کلیک XP می‌دهد و سطح بالا می‌رود", () =
   assert.ok(st.stats.clicks === 5000);
   assert.ok(st.level > 3, "باید حداقل سطح ۳ شده باشد: " + st.level);
   assert.ok(st.xp >= 0);
-  assert.ok(st.gold === 150, "کلیک طلا نمی‌دهد");
+  assert.ok(st.gold >= 80, "طلای شروع نباید منفی شود: " + st.gold);
 });
 t("جایزه لول‌آپ: حداکثر ۳ در روز و هر انتخاب متفاوت", () => {
   const st = newState("t", "s");
@@ -318,6 +318,30 @@ t("امتیاز آمار و ارتقای سایه و جارو", () => {
   assert.ok(firstClearMult(st, "dungeon", 99) > 1);
   assert.ok(featuredMult(st, "dungeon", -1) === 1);
   assert.ok(achievementsOf(st).length >= 12);
+});
+
+t("گرایند از صفر: تمرین طلا می‌دهد و سلاح اول قابل خرید است", () => {
+  const st = newState("t", "s");
+  const w = SHOP_ITEMS.find((x) => x.effects && x.effects.type === "weapon");
+  assert.ok(w && w.price.gold < 80, "سلاح اول باید ارزان باشد: " + w.price.gold);
+  const start = st.gold;
+  for (let i = 0; i < 80; i++) doTrain(st);
+  assert.ok(st.gold > start, "تمرین باید طلا بدهد");
+  assert.ok(st.gold >= w.price.gold, "بعد از گرایند باید سلاح اول را بخری");
+  const r = buyItem(st, w.id);
+  assert.ok(r.ok && st.items[w.id] === 1);
+});
+t("دشمن‌ها نوع و عنصر دارند", () => {
+  const d = dungeonIndex(3);
+  const b = bossIndex(4);
+  assert.ok(d.element && d.archetype && d.archetype.name);
+  assert.ok(b.element && b.archetype && b.archetype.key);
+  assert.notEqual(dungeonIndex(0).archetype.key, dungeonIndex(1).archetype.key);
+});
+t("مهاجرت ذخیره بعد از بستن برنامه", () => {
+  const m = migrateState({ level: 4, gold: 20, stats: { clicks: 9 } });
+  assert.equal(m.v, 4);
+  assert.ok(m.settings && m.spent && m.login);
 });
 
 console.log(`\n=== نتیجه: ${passed} موفق، ${failed} ناموفق ===`);

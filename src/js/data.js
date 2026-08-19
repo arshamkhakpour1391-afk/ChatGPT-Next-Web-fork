@@ -39,6 +39,18 @@ const BOSS_EPITHETS = ["پادشاه خشم", "نگهبان دروازه", "سا
 const ENEMY_EMOJI = ["👹", "👺", "💀", "👻", "🐺", "🦂", "🐍", "🕷️", "🦇", "🐲", "🐉", "🦅", "🐗", "🐂", "🦁", "🐯", "🐻", "🦈", "🐊", "🗿"];
 const BOSS_EMOJI = ["👹", "💀", "🐲", "👺", "🧌", "🦂", "🐉", "🕷️", "👁️", "🗿", "🐺", "🦇", "🐍", "🦅", "🐗", "🔥", "⚡", "🌑", "🩸", "⚔️"];
 
+export const ELEMENTS = ["آتش", "یخ", "رعد", "سایه", "سم", "نور"];
+export function elementOf(i) { return ELEMENTS[((i % 6) + 6) % 6]; }
+export const ARCHETYPES = [
+  { key: "brute", name: "وحشی", atk: 1.22, def: 0.82, hp: 1.05, tag: "آسیب بالا" },
+  { key: "tank", name: "زره‌پوش", atk: 0.82, def: 1.45, hp: 1.28, tag: "سخت‌جان" },
+  { key: "assassin", name: "قاتل", atk: 1.35, def: 0.7, hp: 0.78, tag: "کریت و سرعت" },
+  { key: "mage", name: "جادوگر", atk: 1.12, def: 0.75, hp: 0.9, tag: "مهارت‌های جادویی" },
+  { key: "summoner", name: "احضارگر", atk: 0.95, def: 0.95, hp: 1.1, tag: "سایه احضار می‌کند" },
+  { key: "venom", name: "زهرآگین", atk: 1.05, def: 0.9, hp: 1.0, tag: "سم مداوم" },
+];
+export function archetypeOf(i) { return ARCHETYPES[((i % ARCHETYPES.length) + ARCHETYPES.length) % ARCHETYPES.length]; }
+
 /* ---------- دانجن‌ها (۱۰٬۰۰۰) ---------- */
 export const DUNGEON_COUNT = 10000;
 export function dungeonIndex(i) {
@@ -67,7 +79,8 @@ export function dungeonIndex(i) {
     emoji: ENEMY_EMOJI[Math.floor(rng() * ENEMY_EMOJI.length)],
     bossEmoji: BOSS_EMOJI[Math.floor(rng() * BOSS_EMOJI.length)],
     story,
-    element: ELEMENTS[i % ELEMENTS.length]
+    element: ELEMENTS[i % ELEMENTS.length],
+    archetype: archetypeOf(i)
   };
 }
 function makeDungeonStory(rng, noun, adj, monster, level, tier) {
@@ -109,7 +122,9 @@ export function bossIndex(i) {
   const lore = makeBossLore(rng, nm, ep, level);
   return {
     i, level, rank, name, hp, atk, def, gold, xp, essenceChance,
-    skills, lore, emoji: BOSS_EMOJI[Math.floor(rng() * BOSS_EMOJI.length)]
+    skills, lore, emoji: BOSS_EMOJI[Math.floor(rng() * BOSS_EMOJI.length)],
+    element: ELEMENTS[i % ELEMENTS.length],
+    archetype: archetypeOf(i)
   };
 }
 function makeBossSkills(rng, level) {
@@ -300,11 +315,11 @@ export const SHOP_ITEMS = (() => {
   };
   WEAPONS.forEach((w, idx) => {
     const atk = 8 + idx * 14 + Math.floor(idx * idx * 0.8);
-    add("weapon", w, "⚔️", `حمله +${atk}`, { gold: 120 * Math.pow(1.55, idx), gem: null }, { atk, type: "weapon" });
+    add("weapon", w, "⚔️", `حمله +${atk}`, { gold: Math.floor(36 * Math.pow(1.48, idx)), gem: null }, { atk, type: "weapon" });
   });
   ARMORS.forEach((a, idx) => {
     const def = 5 + idx * 9 + Math.floor(idx * idx * 0.6);
-    add("armor", a, "🛡️", `دفاع +${def}`, { gold: 100 * Math.pow(1.5, idx), gem: null }, { def, type: "armor" });
+    add("armor", a, "🛡️", `دفاع +${def}`, { gold: Math.floor(28 * Math.pow(1.46, idx)), gem: null }, { def, type: "armor" });
   });
   POTIONS.forEach((p, idx) => {
     add("potion", p.name, "🧪", (p.heal ? `جان +${p.heal}٪` : p.energy ? `انرژی +${p.energy}` : "تقویت موقت"),
@@ -329,9 +344,6 @@ export const SHOP_ITEMS = (() => {
   add("potion", "معجون پاری", "🧪", "بلوک بعدی پاری کامل است", { gold: 280, gem: null }, { parry: 1 });
   return items;
 })();
-
-export const ELEMENTS = ["آتش", "یخ", "رعد", "سایه", "سم", "نور"];
-export function elementOf(i) { return ELEMENTS[((i % 6) + 6) % 6]; }
 export function itemById(id) { return SHOP_ITEMS.find((x) => x.id === id); }
 
 /* ---------- ماموریت‌ها (۱۰۰۰+ ترکیب) ---------- */

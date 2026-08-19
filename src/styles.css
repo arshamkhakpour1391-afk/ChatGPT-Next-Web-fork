@@ -117,9 +117,17 @@ input{font-family:inherit}
 .power-ico{width:14px;height:14px;border-radius:3px;background:var(--grad);box-shadow:0 0 8px rgba(124,92,255,.8)}
 
 .pages{position:relative;z-index:3;flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding-bottom:calc(var(--nav-h) + 10px);scroll-behavior:smooth}
-.page{display:none;animation:pageIn .25s}
+.page{display:none}
 .page.active{display:block}
-@keyframes pageIn{from{opacity:0;transform:translateY(6px)}to{opacity:1}}
+.page.page-in{animation:pageIn .28s ease}
+@keyframes pageIn{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
+.nav-btn{transition:transform .12s,color .15s}
+.nav-btn.active{transform:translateY(-2px)}
+.nav-btn.active::after{content:"";position:absolute;bottom:3px;width:14px;height:2px;border-radius:2px;background:var(--purple)}
+.gate-card,.boss-card,.mission-card,.item-card,.skill-card,.inv-item,.player-row,.rank-row{animation:cardIn .28s ease}
+@keyframes cardIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.train-btn.hit-pop{animation:trainHit .12s ease}
+@keyframes trainHit{from{transform:scale(.9)}to{transform:scale(1)}}
 
 /* ---------- نوار پایین: ۹ تب در یک خط بدون اسکرول ---------- */
 .bottomnav{position:relative;z-index:10;flex:none;height:var(--nav-h);display:grid;grid-template-columns:repeat(9,1fr);

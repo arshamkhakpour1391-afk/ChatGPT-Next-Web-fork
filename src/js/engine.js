@@ -45,7 +45,7 @@ export function newState(username, seedStr) {
     v: STATE_VERSION,
     username: username || "",
     seed,
-    level: 1, xp: 0, gold: 150, gems: 3, energy: maxEnergy(1),
+    level: 1, xp: 0, gold: 80, gems: 2, energy: maxEnergy(1),
     stats: { clicks: 0, dayClicks: 0, bestCombo: 0, kills: 0, bosses: 0, dungeons: 0, wins: 0, losses: 0, duels: 0, chatMsgs: 0, skillsUsed: 0, goldEarned: 0, extracts: 0, shopBuys: 0, energyUsed: 0 },
     items: {}, skillsOwned: {},
     equip: { active: [], weapon: null, armor: null, shadows: [], title: null, titleItem: null },
@@ -176,6 +176,11 @@ export function doTrain(st) {
     addXP(st, bonus); evt.xp += bonus; evt.comboBonus = true;
   }
   applyProgress(st, "combo", st.stats.combo);
+  if (st.stats.clicks % 4 === 0) {
+    const g = Math.max(1, Math.floor(1 + st.level * 0.2 + Math.min(8, (st.stats.combo || 0) / 8)));
+    gainGold(st, g);
+    evt.gold = g;
+  }
   st.updatedAt = nowMs();
   return evt;
 }

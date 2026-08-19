@@ -159,6 +159,30 @@ t("پنجرهٔ سیستم و اعلان کار می‌کنند", () => {
   assert.ok(q("#sys-window").classList.contains("hidden"));
 });
 
+t("کلیک سریع تمرین تب را عوض نمی‌کند", () => {
+  click(qa(".nav-btn").find((b) => b.dataset.page === "home"));
+  for (let i = 0; i < 30; i++) q("#btn-train").dispatchEvent(new window.Event("pointerdown", { bubbles: true }));
+  assert.ok(q('.page[data-page="home"]').classList.contains("active"), "تب خانه باید بماند");
+});
+
+t("تمرین طلا هم می‌دهد (گرایند فروشگاه)", () => {
+  click(qa(".nav-btn").find((b) => b.dataset.page === "home"));
+  const before = q("#res-gold").textContent;
+  for (let i = 0; i < 20; i++) q("#btn-train").dispatchEvent(new window.Event("pointerdown", { bubbles: true }));
+  assert.notEqual(q("#res-gold").textContent, before, "طلا باید زیاد شود");
+});
+
+t("دکمه سریع خانه هست", () => {
+  assert.ok(q("#quick-row") && q("#quick-row").children.length >= 3);
+});
+
+t("باز و بسته شدن برنامه داده را نگه می‌دارد", () => {
+  const st = window.__slsState();
+  assert.ok(st && st.level >= 1);
+  const again = window.__slsState();
+  assert.equal(again.stats.clicks, st.stats.clicks);
+});
+
 t("هیچ خطای جاوااسکریپتی رخ نداد", () => {
   assert.equal(window.__slsErrors?.length || 0, 0, "خطاها: " + (window.__slsErrors || []).join(" | "));
 });

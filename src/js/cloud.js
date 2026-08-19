@@ -52,22 +52,37 @@ export async function checkSchema() {
 export function schemaReady() { return schemaOk === true; }
 
 /* ---------- ثبت / ورود ---------- */
+function unwrapRpc(data) {
+  if (!data) return data;
+  if (typeof data === "string") {
+    try { data = JSON.parse(data); } catch (e) { return { error: data }; }
+  }
+  if (Array.isArray(data)) data = data[0];
+  return data;
+}
 export async function register(username, pass) {
+  if (!sb) initCloud();
   try {
     const { data, error } = await withTimeout(sb.rpc("register", { p_username: username, p_pass: pass }));
     if (error) return { error: friendlyError(error) };
-    if (data && data.error) return { error: data.error };
-    return data;
+    const out = unwrapRpc(data);
+    if (out && out.error) return { error: out.error };
+    if (!out || !out.token) return { error: "پاسخ سرور ناقص بود — دوباره امتحان کن" };
+    return out;
   } catch (e) {
     return { error: "اتصال به سرور برقرار نشد. اینترنت را چک کن." };
   }
 }
 export async function login(username, pass) {
+  if (!sb) initCloud();
+  if (!username || !pass) return { error: "نام کاربری و رمز را کامل بنویس" };
   try {
     const { data, error } = await withTimeout(sb.rpc("login", { p_username: username, p_pass: pass }));
     if (error) return { error: friendlyError(error) };
-    if (data && data.error) return { error: data.error };
-    return data;
+    const out = unwrapRpc(data);
+    if (out && out.error) return { error: out.error };
+    if (!out || !out.token) return { error: "پاسخ سرور ناقص بود — دوباره امتحان کن" };
+    return out;
   } catch (e) {
     return { error: "اتصال به سرور برقرار نشد. اینترنت را چک کن." };
   }
