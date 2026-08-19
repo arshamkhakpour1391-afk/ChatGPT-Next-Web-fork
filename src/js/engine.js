@@ -679,6 +679,57 @@ export function dailyDeals(st) {
 }
 
 /* ---------- وضعیت تیک ---------- */
+export function autoEquipBest(st) {
+  let w = null, a = null, t = null;
+  for (const id of Object.keys(st.items || {})) {
+    const it = itemById(Number(id));
+    if (!it || !(st.items[id] > 0)) continue;
+    if (it.effects.type === "weapon" && (!w || (it.effects.atk || 0) > (w.effects.atk || 0))) w = it;
+    if (it.effects.type === "armor" && (!a || (it.effects.def || 0) > (a.effects.def || 0))) a = it;
+    if (it.cat === "title" && it.effects.pow != null && (!t || it.effects.pow > t.effects.pow)) t = it;
+  }
+  if (w) equipWeapon(st, w.id);
+  if (a) equipArmor(st, a.id);
+  if (t) equipTitle(st, t.id);
+  st.updatedAt = nowMs();
+  return { weapon: w, armor: a, title: t };
+}
+
+export function claimAllReady(st) {
+  let n = 0;
+  for (const m of activeMissions(st)) {
+    const rec = st.missions[m.id];
+    if (rec && rec.done && !rec.claimed && claimMission(st, m.id).ok) n++;
+  }
+  const qs = dailyQuests(st);
+  for (const q of Object.values(qs)) {
+    if (q.done && !q.claimed && claimDailyQuest(st, q.id).ok) n++;
+  }
+  return n;
+}
+
+export function dailyFeatured() {
+  const rng = mulberry32(seedOf("featured", todayKey()));
+  return {
+    dungeon: Math.floor(rng() * 120),
+    boss: Math.floor(rng() * 60),
+    goldBonus: 1.25,
+  };
+}
+
+export function achievementsOf(st) {
+  return [
+    { id: "l5", name: "شکارچی تازه‌کار", ok: st.level >= 5 },
+    { id: "l30", name: "رتبه C", ok: st.level >= 30 },
+    { id: "click1k", name: "هزار ضربه", ok: (st.stats.clicks || 0) >= 1000 },
+    { id: "boss10", name: "شکارچی باس", ok: (st.stats.bosses || 0) >= 10 },
+    { id: "dun20", name: "پاک‌کننده", ok: (st.stats.dungeons || 0) >= 20 },
+    { id: "win5", name: "رقیب‌کش", ok: (st.stats.wins || 0) >= 5 },
+    { id: "sh3", name: "ارباب سایه", ok: Object.keys(st.shadows || {}).length >= 3 },
+    { id: "combo50", name: "کمبو ۵۰", ok: (st.stats.bestCombo || 0) >= 50 },
+  ];
+}
+
 export function tickState(st) {
   const now = nowMs();
   let changed = false;

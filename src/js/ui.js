@@ -11,6 +11,7 @@ import {
   assignShadow, activeMissions, applyProgress, claimMission, dailyQuests, claimDailyQuest,
   applyPunishment, activeDebuffs, tickState, yearState, claimYearDay, currentPicks, takePick,
   missionBucket, dailyDeals, addRankPts, activeBuffs,
+  autoEquipBest, claimAllReady, dailyFeatured, achievementsOf,
 } from "./engine.js";
 import {
   dungeonIndex, bossIndex, skillIndex, DUNGEON_COUNT, BOSS_COUNT, SKILL_COUNT,
@@ -339,10 +340,34 @@ export function renderHome() {
   renderBuffs();
   maybeDailyLogin();
   maybeIntro();
+  renderFeatured();
+  renderAchievements();
   renderDailyQuests();
   renderYearQuest();
   renderRewardPicks();
   renderPunishments();
+}
+
+function renderFeatured() {
+  const box = $("featured-body");
+  if (!box) return;
+  const f = dailyFeatured();
+  const d = dungeonIndex(f.dungeon);
+  const b = bossIndex(f.boss);
+  box.innerHTML = `<div class="m-meta"><span>🚪 ${esc(d.name)}</span><span>سطح ${faNum(d.level)}</span></div>
+    <button class="btn btn-primary btn-sm" id="feat-d" style="width:100%;margin:6px 0">ورود به دانجن امروز</button>
+    <div class="m-meta"><span>${b.emoji} ${esc(b.name)}</span><span>سطح ${faNum(b.level)}</span></div>
+    <button class="btn btn-red btn-sm" id="feat-b" style="width:100%;margin-top:6px">شکار باس امروز</button>`;
+  $("feat-d")?.addEventListener("click", () => enterDungeon(f.dungeon, d));
+  $("feat-b")?.addEventListener("click", () => fightBoss(f.boss, b));
+}
+function renderAchievements() {
+  const box = $("achieve-body");
+  if (!box) return;
+  const list = achievementsOf(app.getSt());
+  const ok = list.filter((x) => x.ok).length;
+  if ($("achieve-chip")) $("achieve-chip").textContent = `${faNum(ok)}/${faNum(list.length)}`;
+  box.innerHTML = list.map((x) => `<span class="chip ${x.ok ? "chip-green" : "chip-gray"}">${x.ok ? "✓ " : "○ "}${esc(x.name)}</span>`).join(" ");
 }
 
 function maybeIntro() {
@@ -392,6 +417,16 @@ export function renderMissions() {
   $("mission-timer").innerHTML = `ماموریت جدید تا <b>${dur(nextIn)}</b> دیگر — هر ۲ ساعت`;
   const box = $("mission-list");
   box.innerHTML = "";
+  if (missionTab === "active" && !$("btn-claim-all")) {
+    const wrap = make(`<div style="padding:0 12px 8px"><button class="btn btn-gold btn-sm" id="btn-claim-all" style="width:100%">دریافت همهٔ جوایز آماده‌</button></div>`);
+    box.parentNode.insertBefore(wrap, box);
+    wrap.querySelector("#btn-claim-all").addEventListener("click", () => {
+      const n = claimAllReady(app.getSt());
+      if (!n) return toast("چیزی برای دریافت نیست", "info");
+      toast(`${faNum(n)} جایزه دریافت شد`, "gold");
+      sfx.coin(); app.save(); renderMissions(); renderTopbar();
+    });
+  }
   const done = st.missions || {};
   let shown = 0;
   list.forEach((m) => {
@@ -462,6 +497,19 @@ export function showPunishmentModal(ev, reason) {
 /* ================= دروازه‌ها ================= */
 let gateFilter = "all";
 let gateShown = 30;
+let gateSort = "level";
+function paintSort(id, opts, cur, fn) {
+  const bar = $(id);
+  if (!bar) return;
+  if (!bar.children.length) {
+    opts.forEach(([k, lab]) => {
+      const b = make(`<button data-sk="${k}">${lab}</button>`);
+      b.addEventListener("click", () => fn(k));
+      bar.appendChild(b);
+    });
+  }
+  [...bar.children].forEach((b) => b.classList.toggle("on", b.dataset.sk === cur));
+}
 export function renderGates() {
   const st = app.getSt();
   const filters = ["all", "E", "D", "C", "B", "A", "S", "SS", "N", "M"];
@@ -481,15 +529,26 @@ export function renderGates() {
     $("gate-search")._bound = true;
     $("gate-search").addEventListener("input", debounce(() => { gateShown = 30; renderGates(); }, 180));
   }
+  paintSort("gate-sort", [["level","سطح"],["gold","پاداش"],["open","قابل ورود"],["done","پاک‌شده"]], gateSort, (k) => { gateSort = k; gateShown = 30; renderGates(); });
   const box = $("gate-list");
   box.innerHTML = "";
   let shown = 0, total = 0;
-  for (let i = 0; i < DUNGEON_COUNT && shown < gateShown; i++) {
+  const order = [];
+  for (let i = 0; i < DUNGEON_COUNT; i++) {
     const d = dungeonIndex(i);
     if (gateFilter !== "all" && d.rank.key !== gateFilter) continue;
     if (q && !(`${d.name} ${d.monster}`).includes(q)) continue;
+    order.push(d);
+  }
+  if (gateSort === "gold") order.sort((a, b) => b.gold - a.gold);
+  else if (gateSort === "open") order.sort((a, b) => (st.level >= a.level ? 0 : 1) - (st.level >= b.level ? 0 : 1) || a.level - b.level);
+  else if (gateSort === "done") order.sort((a, b) => ((st.dungeons && st.dungeons[b.i]) ? 1 : 0) - ((st.dungeons && st.dungeons[a.i]) ? 1 : 0));
+  else order.sort((a, b) => a.level - b.level);
+  for (const d of order) {
+    if (shown >= gateShown) break;
+    const i = d.i;
     total++;
-    if (++shown > gateShown) break;
+    shown++;
     const locked = st.level < d.level;
     const cleared = st.dungeons && st.dungeons[i] && st.dungeons[i].cleared;
     const card = make(`<div class="gate-card" style="${cleared ? "border-color:rgba(46,255,126,.4)" : ""}">
@@ -546,6 +605,7 @@ function enterDungeon(i, d) {
 /* ================= باس‌ها ================= */
 let bossFilter = "all";
 let bossShown = 30;
+let bossSort = "level";
 export function renderBosses() {
   const filters = ["all", "E", "D", "C", "B", "A", "S", "SS", "N", "M"];
   if (!$("battle-filters").children.length) {
@@ -565,13 +625,23 @@ export function renderBosses() {
     $("boss-search")._bound = true;
     $("boss-search").addEventListener("input", debounce(() => { bossShown = 30; renderBosses(); }, 180));
   }
+  paintSort("boss-sort", [["level","سطح"],["gold","پاداش"],["kill","کشته‌شده"]], bossSort, (k) => { bossSort = k; bossShown = 30; renderBosses(); });
   const box = $("boss-list");
   box.innerHTML = "";
   let shown = 0;
-  for (let i = 0; i < BOSS_COUNT && shown < bossShown; i++) {
+  const order = [];
+  for (let i = 0; i < BOSS_COUNT; i++) {
     const b = bossIndex(i);
     if (bossFilter !== "all" && b.rank.key !== bossFilter) continue;
     if (q && !b.name.includes(q)) continue;
+    order.push(b);
+  }
+  if (bossSort === "gold") order.sort((a, b) => b.gold - a.gold);
+  else if (bossSort === "kill") order.sort((a, b) => ((st.bosses && st.bosses[b.i]) ? 1 : 0) - ((st.bosses && st.bosses[a.i]) ? 1 : 0));
+  else order.sort((a, b) => a.level - b.level);
+  for (const b of order) {
+    if (shown >= bossShown) break;
+    const i = b.i;
     shown++;
     const killed = st.bosses && st.bosses[i] && st.bosses[i].killed;
     const tooStrong = st.level + 15 < b.level;
@@ -680,6 +750,7 @@ function doExtract(src, stoneId) {
 
 /* ================= فروشگاه ================= */
 let shopCat = "weapon";
+let shopSort = "default";
 export function renderShop() {
   const st = app.getSt();
   if (!$("shop-tabs").children.length) {
@@ -710,9 +781,14 @@ export function renderShop() {
     $("deal-strip").appendChild(card);
   });
   // آیتم‌ها
+  paintSort("shop-sort", [["default","پیش‌فرض"],["cheap","ارزان"],["rich","گران"],["own","مال خودم"]], shopSort, (k) => { shopSort = k; renderShop(); });
   const grid = $("shop-grid");
   grid.innerHTML = "";
-  SHOP_ITEMS.filter((it) => it.cat === shopCat).forEach((it) => {
+  let list = SHOP_ITEMS.filter((it) => it.cat === shopCat);
+  if (shopSort === "cheap") list = list.slice().sort((a, b) => (a.price.gold || a.price.gem * 200 || 0) - (b.price.gold || b.price.gem * 200 || 0));
+  if (shopSort === "rich") list = list.slice().sort((a, b) => (b.price.gold || b.price.gem * 200 || 0) - (a.price.gold || a.price.gem * 200 || 0));
+  if (shopSort === "own") list = list.slice().sort((a, b) => (st.items[b.id] || 0) - (st.items[a.id] || 0));
+  list.forEach((it) => {
     const owned = st.items[it.id] || 0;
     const card = make(`<div class="item-card">
       <div class="item-ico">${it.icon}</div>
@@ -1116,6 +1192,7 @@ function startDuelSession(duelId, mode, isHost, me, opp, duelRow) {
       addEvent("پیروزی در رقابت", `حریف ${me.name === duelRow?.p1name ? duelRow?.p2name : duelRow?.p1name || opp.name} را شکست دادی`, "good");
     } else {
       st.stats.losses++;
+      addRankPts(st, -10);
       const loss = Math.min(st.gold, 40 + st.level * 8);
       st.gold -= loss;
       toast(`شکست خوردی... ${fmtNum(loss)} طلا از دست دادی. دفعهٔ بعد انتقام بگیر!`, "bad", 4000);

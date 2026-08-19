@@ -1,0 +1,17 @@
+apply plugin: 'com.android.library'
+android {
+    namespace "capacitor.cordova.android.plugins"
+    compileSdk rootProject.ext.compileSdkVersion
+    defaultConfig {
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+repositories { google(); mavenCentral() }
+dependencies {
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+}

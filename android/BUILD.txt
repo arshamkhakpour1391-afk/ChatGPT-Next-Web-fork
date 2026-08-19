@@ -1,0 +1,26 @@
+solo system — Gradle only
+=========================
+
+Need on your PC:
+  1) JDK 17
+  2) Android SDK (API 34)  — Android Studio is enough
+
+Then:
+
+Windows (PowerShell):
+  cd android
+  echo sdk.dir=%LOCALAPPDATA%\Android\Sdk> local.properties
+  gradlew.bat assembleRelease
+
+macOS / Linux:
+  cd android
+  echo "sdk.dir=$HOME/Library/Android/sdk" > local.properties   # mac
+  # echo "sdk.dir=$HOME/Android/Sdk" > local.properties         # linux
+  chmod +x gradlew
+  ./gradlew assembleRelease
+
+APK:
+  android/app/build/outputs/apk/release/app-release.apk
+
+Name on phone: solo system
+Package: com.arsham.solosystem

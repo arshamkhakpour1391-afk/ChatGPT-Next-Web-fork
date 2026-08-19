@@ -7,7 +7,7 @@ import {
   assignShadow, extractShadow, activeMissions, applyProgress, claimMission,
   dailyQuests, claimDailyQuest, applyPunishment, activeDebuffs, tickState, yearState,
   claimYearDay, currentPicks, takePick, addRewardPick, missionBucket, calcDamage, newShadow, dailyDeals,
-  claimDailyLogin, unlockTitles, addRankPts, regenEnergy, addBuff, activeBuffs
+  claimDailyLogin, unlockTitles, addRankPts, regenEnergy, addBuff, activeBuffs, autoEquipBest, claimAllReady, dailyFeatured, achievementsOf
 } from "../src/js/engine.js";
 import {
   dungeonIndex, bossIndex, skillIndex, DUNGEON_COUNT, BOSS_COUNT, SKILL_COUNT,
@@ -272,6 +272,18 @@ t("معجون باف و انرژی آفلاین", () => {
   st.energyAt = Date.now() - 120000;
   const g = regenEnergy(st);
   assert.ok(g >= 3 && st.energy > 1, "انرژی آفلاین: " + g);
+});
+
+
+t("تجهیز خودکار و دستاورد و هدف روزانه", () => {
+  const st = newState("t", "s");
+  const w = SHOP_ITEMS.find((x) => x.effects.type === "weapon");
+  st.items[w.id] = 1;
+  const r = autoEquipBest(st);
+  assert.ok(r.weapon && st.equip.weapon === w.id);
+  assert.ok(achievementsOf(st).length >= 5);
+  const f = dailyFeatured();
+  assert.ok(f.dungeon >= 0 && f.boss >= 0);
 });
 
 console.log(`\n=== نتیجه: ${passed} موفق، ${failed} ناموفق ===`);

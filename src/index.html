@@ -109,6 +109,14 @@
         </div>
 
         <div class="home-stats" id="home-stats"></div>
+        <div class="card" id="featured-card">
+          <div class="card-head"><h3>هدف امروز سیستم</h3><span class="chip chip-gold">جایزه +۲۵٪</span></div>
+          <div class="card-body" id="featured-body"></div>
+        </div>
+        <div class="card" id="achieve-card">
+          <div class="card-head"><h3>دستاوردها</h3><span class="chip chip-purple" id="achieve-chip">۰</span></div>
+          <div class="card-body" id="achieve-body"></div>
+        </div>
 
         <div class="card" id="daily-quests-card">
           <div class="card-head"><h3>ماموریت‌های روزانه اجباری</h3><span class="chip chip-red">اگر انجام نشود: مجازات!</span></div>
@@ -142,6 +150,7 @@
       <div class="page" data-page="gates">
         <div class="page-head"><h2>دروازه‌ها (دانجن)</h2><p>۱۰٬۰۰۰ دانجن واقعی — از E تا پادشاه سایه‌ها</p></div>
         <input class="search-box" id="gate-search" type="search" placeholder="جستجوی دروازه یا هیولا..." maxlength="40">
+        <div class="sort-bar" id="gate-sort"></div>
         <div class="gate-filters" id="gate-filters"></div>
         <div class="list" id="gate-list"></div>
         <div class="load-more-wrap"><button class="btn btn-ghost hidden" id="gates-more">نمایش بیشتر</button></div>
@@ -151,6 +160,7 @@
       <div class="page" data-page="battle">
         <div class="page-head"><h2>نبرد با باس‌ها</h2><p>۱٬۰۰۰ باس — هر باس به تو آسیب می‌زند!</p></div>
         <input class="search-box" id="boss-search" type="search" placeholder="جستجوی باس..." maxlength="40">
+        <div class="sort-bar" id="boss-sort"></div>
         <div class="battle-filters" id="battle-filters"></div>
         <div class="list" id="boss-list"></div>
         <div class="load-more-wrap"><button class="btn btn-ghost hidden" id="bosses-more">نمایش بیشتر</button></div>
@@ -159,6 +169,7 @@
       <!-- ===== تب فروشگاه ===== -->
       <div class="page" data-page="shop">
         <div class="page-head"><h2>فروشگاه سیستم</h2><p id="shop-refresh">تخفیف روزانه: تا <b>—</b></p></div>
+        <div class="sort-bar" id="shop-sort"></div>
         <div class="shop-tabs" id="shop-tabs"></div>
         <div class="deal-strip" id="deal-strip"></div>
         <div class="shop-grid" id="shop-grid"></div>
