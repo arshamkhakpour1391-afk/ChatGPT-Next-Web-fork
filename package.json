@@ -8,7 +8,9 @@
     "dev": "node scripts/devserver.mjs",
     "test": "node ci/test-engine.mjs",
     "apk:add": "npx cap add android",
-    "test:ui": "node ci/test-ui.mjs"
+    "test:ui": "node ci/test-ui.mjs",
+    "make-apk": "python3 scripts/make-apk.py",
+    "apk": "python3 scripts/make-apk.py"
   },
   "dependencies": {
     "@capacitor/android": "6.2.0",
