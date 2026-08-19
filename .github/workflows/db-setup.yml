@@ -1,0 +1,39 @@
+name: نصب دیتابیس
+
+on:
+  workflow_dispatch:
+    inputs:
+      db_password:
+        description: "رمز دیتابیس Supabase"
+        required: true
+  push:
+    branches: [ "arena/**" ]
+
+jobs:
+  apply-schema:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: نصب psql
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - name: اجرای schema روی دیتابیس
+        env:
+          PGPASSWORD: ${{ inputs.db_password || '' }}
+        run: |
+          if [ -z "$PGPASSWORD" ]; then echo "برای اجرای دستی: Actions → نصب دیتابیس → Run workflow → رمز را وارد کن"; exit 0; fi
+          psql "postgresql://postgres@db.baooyxmxzkzwimitjfjk.supabase.co:6543/postgres?sslmode=require" -v ON_ERROR_STOP=1 -f sql/schema.sql
+      - name: تست یکپارچه‌سازی
+        env:
+          PGPASSWORD: ${{ inputs.db_password || '' }}
+          SUPABASE_URL: https://baooyxmxzkzwimitjfjk.supabase.co
+          SUPABASE_KEY: sb_publishable_n8EE3d9MUYK9ah_hdMi9kg_WhMsHKRI
+        run: |
+          if [ -z "$PGPASSWORD" ]; then exit 0; fi
+          npm ci && node ci/test-integration.mjs
+      - name: پاک‌سازی داده‌های تست
+        if: always()
+        env:
+          PGPASSWORD: ${{ inputs.db_password || '' }}
+        run: |
+          if [ -z "$PGPASSWORD" ]; then exit 0; fi
+          psql "postgresql://postgres@db.baooyxmxzkzwimitjfjk.supabase.co:6543/postgres?sslmode=require" -c "delete from public.duels where p1name like 'slstest_%' or p2name like 'slstest_%'; delete from public.chat_messages where username like 'slstest_%'; delete from public.chat_rooms where name like 'slstest_%'; delete from public.accounts where username like 'slstest_%';"
