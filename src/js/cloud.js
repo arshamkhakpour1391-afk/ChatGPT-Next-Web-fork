@@ -36,9 +36,14 @@ export function getSession() { return sessionToken; }
 export async function checkSchema() {
   if (!sb) initCloud();
   try {
-    const { error } = await withTimeout(sb.from("accounts").select("id", { head: true, count: "exact" }));
+    const ping = await withTimeout(sb.rpc("schema_ok"));
+    if (!ping.error && ping.data === true) {
+      schemaOk = true;
+      return { ok: true, error: null };
+    }
+    const { error } = await withTimeout(sb.from("chat_rooms").select("id", { head: true, count: "exact" }));
     schemaOk = !error;
-    return { ok: !error, error };
+    return { ok: !error, error: error || ping.error };
   } catch (e) {
     schemaOk = false;
     return { ok: false, error: e };

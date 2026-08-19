@@ -104,8 +104,14 @@ for each row execute function public.block_username_change();
 -- ============================================================
 
 -- کاربر جاری از روی توکن هدر x-session-token
+-- SECURITY DEFINER الزامی است وگرنه RLS روی sessions دوباره همین تابع را صدا می‌زند (خطای 54001)
 create or replace function public.current_user_id()
-returns uuid language sql stable as $$
+returns uuid
+language sql
+stable
+security definer
+set search_path = public
+as $$
   select user_id from public.sessions
   where token = coalesce(current_setting('request.headers', true)::json ->> 'x-session-token', '')
     and expires_at > now()
@@ -113,7 +119,7 @@ returns uuid language sql stable as $$
 $$;
 
 create or replace function public.register(p_username text, p_pass text)
-returns json language plpgsql security definer as $$
+returns json language plpgsql security definer set search_path = public as $$
 declare
   v_id uuid;
   v_token text;
@@ -155,7 +161,7 @@ end;
 $$;
 
 create or replace function public.login(p_username text, p_pass text)
-returns json language plpgsql security definer as $$
+returns json language plpgsql security definer set search_path = public as $$
 declare
   v_id uuid;
   v_token text;
@@ -186,13 +192,13 @@ end;
 $$;
 
 create or replace function public.logout()
-returns void language sql security definer as $$
+returns void language sql security definer set search_path = public as $$
   delete from public.sessions
   where token = coalesce(current_setting('request.headers', true)::json ->> 'x-session-token', '');
 $$;
 
 create or replace function public.leaderboard(p_kind text default 'power', p_lim int default 100)
-returns setof jsonb language sql stable security definer as $$
+returns setof jsonb language sql stable security definer set search_path = public as $$
   select jsonb_build_object(
     'username', username,
     'level', level,
@@ -221,7 +227,7 @@ returns setof jsonb language sql stable security definer as $$
 $$;
 
 create or replace function public.my_rank(p_kind text default 'power')
-returns int language sql stable security definer as $$
+returns int language sql stable security definer set search_path = public as $$
   select cnt::int from (
     select count(*) + 1 as cnt
     from public.players q
@@ -245,7 +251,7 @@ returns int language sql stable security definer as $$
 $$;
 
 create or replace function public.online_players()
-returns setof jsonb language sql stable security definer as $$
+returns setof jsonb language sql stable security definer set search_path = public as $$
   select jsonb_build_object(
     'user_id', user_id,
     'username', username,
@@ -262,14 +268,14 @@ returns setof jsonb language sql stable security definer as $$
 $$;
 
 create or replace function public.list_rooms()
-returns setof jsonb language sql stable security definer as $$
+returns setof jsonb language sql stable security definer set search_path = public as $$
   select jsonb_build_object(
     'id', id, 'name', name, 'owner', owner, 'members', members, 'created_at', created_at
   ) from public.chat_rooms order by created_at desc limit 100;
 $$;
 
 create or replace function public.create_room(p_name text)
-returns json language plpgsql security definer as $$
+returns json language plpgsql security definer set search_path = public as $$
 declare
   v_id uuid := gen_random_uuid();
   v_user uuid := public.current_user_id();
@@ -290,7 +296,7 @@ end;
 $$;
 
 create or replace function public.join_room(p_id uuid)
-returns json language plpgsql security definer as $$
+returns json language plpgsql security definer set search_path = public as $$
 declare
   v_user uuid := public.current_user_id();
 begin
@@ -423,9 +429,23 @@ create policy voice_select on storage.objects
   using (bucket_id = 'voice');
 
 -- ============================================================
+--  سلامت دیتابیس (برای دکمهٔ بررسی)
+-- ============================================================
+create or replace function public.schema_ok()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (select 1 from pg_tables where schemaname = 'public' and tablename = 'accounts');
+$$;
+
+-- ============================================================
 --  Grants
 -- ============================================================
 grant usage on schema public to anon, authenticated;
+grant execute on function public.schema_ok() to anon, authenticated;
 grant execute on function public.register(text, text) to anon, authenticated;
 grant execute on function public.login(text, text) to anon, authenticated;
 grant execute on function public.logout() to anon, authenticated;
@@ -436,6 +456,8 @@ grant execute on function public.list_rooms() to anon, authenticated;
 grant execute on function public.create_room(text) to anon, authenticated;
 grant execute on function public.join_room(uuid) to anon, authenticated;
 grant execute on function public.current_user_id() to anon, authenticated;
+grant select on public.accounts to anon, authenticated;
+grant select on public.sessions to anon, authenticated;
 grant select, insert, update on public.players to anon, authenticated;
 grant select, insert on public.chat_messages to anon, authenticated;
 grant select, insert, update on public.chat_rooms to anon, authenticated;
