@@ -369,11 +369,13 @@ window.__slsShooterDemo = () => {
   });
 };
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden && st && !el("screen-auth")?.classList.contains("hidden") === false) {
+  if (document.hidden || !st) return;
+  if (!el("screen-auth")?.classList.contains("hidden")) return;
+  try {
     tickAndRender();
-    if (ui.currentPageName() === "home") ui.renderHome();
     ui.renderTopbar();
-  }
+    if (ui.currentPageName() === "home") ui.renderHome();
+  } catch (e) { console.warn(e); }
 });
 window.addEventListener("beforeunload", () => { try { if (st) lsSet(stateKey(), st); } catch (e) {} });
 window.addEventListener("online", () => { ui.toast("اینترنت برگشت — در حال همگام‌سازی...", "good"); if (account) saveNow(); });

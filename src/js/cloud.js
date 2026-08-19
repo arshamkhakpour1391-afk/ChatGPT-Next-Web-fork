@@ -94,7 +94,9 @@ export async function logoutCloud() {
 }
 function friendlyError(e) {
   if (e && e.code === "PGRST205") return "دیتابیس هنوز نصب نشده. دکمهٔ «نصب دیتابیس» را بزن.";
-  if (e && e.message) return e.message;
+  const msg = (e && e.message) ? String(e.message) : "";
+  if (/offline|Failed to fetch|NetworkError|TIMEOUT/i.test(msg)) return "اتصال به سرور برقرار نشد. اینترنت را چک کن.";
+  if (msg) return msg;
   return "خطای سرور";
 }
 

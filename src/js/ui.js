@@ -78,7 +78,8 @@ $("modal-wrap")?.addEventListener("click", (e) => {
 
 /* ---------- رویدادها (مرکز اعلان) ---------- */
 export function addEvent(title, body, type = "info") {
-  const st = app.getSt();
+  const st = app && app.getSt && app.getSt();
+  if (!st) return;
   st.events = st.events || [];
   st.events.unshift({ ts: nowMs(), title, body, type });
   if (st.events.length > 60) st.events.length = 60;
@@ -1019,11 +1020,19 @@ function renderItems(box) {
       app.save(); renderTopbar(); renderBag();
     });
     row.querySelector("[data-sell]")?.addEventListener("click", () => {
-      if (!window.confirm(`«${it.name}» فروخته شود؟`)) return;
-      const r = sellItem(app.getSt(), it.id, 1);
-      if (r.error) return toast(r.error, "bad");
-      toast("فروخته شد", "info"); sfx.coin();
-      app.save(); renderTopbar(); renderBag();
+      modal({
+        title: "فروش آیتم",
+        body: `<p>«${esc(it.name)}» فروخته شود؟</p>`,
+        actions: [
+          { label: "بله، بفروش", cls: "btn-primary", cb() {
+            const r = sellItem(app.getSt(), it.id, 1);
+            if (r.error) return toast(r.error, "bad");
+            toast("فروخته شد", "info"); sfx.coin();
+            app.save(); renderTopbar(); renderBag();
+          } },
+          { label: "انصراف", cb() {} },
+        ]
+      });
     });
     box.appendChild(row);
   });
@@ -1085,11 +1094,20 @@ function renderGear(box) {
   const w = itemById(st.equip.weapon);
   const a = itemById(st.equip.armor);
   const t = itemById(st.equip.titleItem);
+  const pts = st.statPts || 0;
+  const sp = st.spent || { hp: 0, atk: 0, def: 0, crit: 0 };
   box.innerHTML = `
     <div class="card" style="margin:0"><div class="card-body">
       <div class="m-meta"><span>جان: <b>${fmtNum(cs.hp)}</b></span><span>حمله: <b>${fmtNum(cs.atk)}</b></span><span>دفاع: <b>${fmtNum(cs.def)}</b></span></div>
       <div class="m-meta"><span>کریت: <b>${faNum(Math.floor(cs.crit))}٪</b></span><span>جاخالی: <b>${faNum(Math.floor(cs.dodge))}٪</b></span><span>قدرت کل: <b>${fmtNum(computePower(st))}</b></span></div>
       <div class="m-meta"><span>XP+: <b>${faNum(Math.floor((cs.xpMult - 1) * 100))}٪</b></span><span>طلا+: <b>${faNum(Math.floor((cs.goldMult - 1) * 100))}٪</b></span><span>سایه+: <b>${faNum(Math.floor((cs.extractMult - 1) * 100))}٪</b></span></div>
+    </div></div>
+    <div class="card" style="margin:0"><div class="card-head"><h3>امتیاز آمار</h3><span class="chip chip-gold">${faNum(pts)} مانده</span></div>
+    <div class="card-body">
+      <div class="m-meta"><span>جان (${faNum(sp.hp || 0)})</span><button class="btn btn-sm btn-primary" data-st="hp">+۱</button></div>
+      <div class="m-meta"><span>حمله (${faNum(sp.atk || 0)})</span><button class="btn btn-sm btn-primary" data-st="atk">+۱</button></div>
+      <div class="m-meta"><span>دفاع (${faNum(sp.def || 0)})</span><button class="btn btn-sm btn-primary" data-st="def">+۱</button></div>
+      <div class="m-meta"><span>کریت (${faNum(sp.crit || 0)})</span><button class="btn btn-sm btn-primary" data-st="crit">+۱</button></div>
     </div></div>
     <div class="card" style="margin:0"><div class="card-head"><h3>تجهیزات فعلی</h3></div><div class="card-body">
       <div class="m-meta"><span>سلاح: <b>${w ? esc(w.name) : "—"}</b></span></div>
@@ -1097,6 +1115,14 @@ function renderGear(box) {
       <div class="m-meta"><span>عنوان: <b>${t ? esc(t.name) : "—"}</b></span></div>
       <div class="m-meta"><span>سایه‌های همراه: <b>${faNum(st.equip.shadows.length)}/۳</b></span></div>
     </div></div>`;
+  box.querySelectorAll("[data-st]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const r = spendStat(app.getSt(), btn.dataset.st);
+      if (r.error) return toast(r.error, "bad");
+      toast("آمار تقویت شد", "good"); sfx.skill();
+      app.save(); renderTopbar(); renderBag();
+    });
+  });
 }
 
 /* ================= رقابت ================= */
@@ -1641,7 +1667,7 @@ $("btn-settings").addEventListener("click", () => {
     title: "تنظیمات",
     body: `
       <div class="m-meta" style="justify-content:space-between"><span>وضعیت ابر: <b>${cloudState}</b></span><span>دیتابیس: <b>${cloud.schemaReady() ? "✅ نصب شده" : "❌ نصب نشده"}</b></span></div>
-      <div class="m-meta" style="justify-content:space-between"><span>حساب: <b>${esc(st.username)}</b></span><span>Solo System ۲.۳</span></div>
+      <div class="m-meta" style="justify-content:space-between"><span>حساب: <b>${esc(st.username)}</b></span><span>Solo System ۲.۴</span></div>
       <p style="margin-top:10px">ساختهٔ ارشام — داده‌ها روی ابر و دستگاه می‌مانند.</p>
       <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px">
         <button class="btn btn-ghost btn-sm" id="set-sound">${isMuted() ? "🔊 روشن کردن صدا" : "🔇 خاموش کردن صدا"}</button>
@@ -1779,12 +1805,49 @@ async function doAuth() {
   const pass = $("auth-pass").value;
   $("auth-err").textContent = "";
   if (!user || !pass) { $("auth-err").textContent = "نام کاربری و رمز را کامل بنویس"; return; }
+  if (user.length < 3 || user.length > 20) { $("auth-err").textContent = "نام کاربری باید ۳ تا ۲۰ حرف انگلیسی باشد"; return; }
+  if (!/^[a-z0-9_]+$/.test(user)) { $("auth-err").textContent = "فقط حروف انگلیسی، عدد و _"; return; }
+  if (pass.length < 4) { $("auth-err").textContent = "رمز حداقل ۴ حرف"; return; }
   const btn = $("auth-submit");
   btn.disabled = true; btn.textContent = authTab === "login" ? "در حال ورود..." : "در حال ساخت حساب...";
   try {
-    const r = authTab === "login" ? await cloud.login(user, pass) : await cloud.register(user, pass);
-    if (r.error) { $("auth-err").textContent = r.error; return; }
-    await app.onAuthed(r);
+    cloud.initCloud?.();
+    const locals = lsGet("local_accounts") || {};
+    if (authTab === "login" && locals[user] && locals[user].pass === pass) {
+      const local = localAuthFallback("login", user, pass);
+      await app.onAuthed(local, pass);
+      cloud.login(user, pass).then((cr) => {
+        if (cr && cr.token && !cr.error) {
+          const acc = lsGet("account") || {};
+          lsSet("account", { ...acc, token: cr.token, pass });
+          cloud.setSession(cr.token);
+        }
+      }).catch(() => {});
+      return;
+    }
+    let r = { error: "no" };
+    try {
+      r = authTab === "login" ? await cloud.login(user, pass) : await cloud.register(user, pass);
+    } catch (e) {
+      r = { error: "اتصال به سرور برقرار نشد" };
+    }
+    const netFail = !r || r.error && /اتصال|TIMEOUT|سرور|Failed|fetch|network|offline|no client|PGRST205|نصب نشده|خطای سرور/i.test(String(r.error));
+    if (r.error) {
+      if (netFail) {
+        let local = localAuthFallback(authTab, user, pass);
+        if (local.error && authTab === "register") local = localAuthFallback("login", user, pass);
+        if (local.error) { $("auth-err").textContent = local.error; return; }
+        r = local;
+        toast("بدون ابر وارد شدی — بعداً همگام می‌شود", "info", 3200);
+      } else {
+        $("auth-err").textContent = typeof r.error === "string" ? r.error : (r.error.message || "ورود ناموفق");
+        return;
+      }
+    }
+    if (!r.token) { $("auth-err").textContent = "توکن نیامد — دوباره بزن"; return; }
+    await app.onAuthed(r, pass);
+  } catch (e) {
+    $("auth-err").textContent = "خطای غیرمنتظره — دوباره بزن";
   } finally {
     btn.disabled = false;
     btn.textContent = authTab === "login" ? "ورود به سیستم" : "ساخت حساب جدید";

@@ -504,6 +504,23 @@ function renderActions() {
   const atk = make(`<button class="fa-btn attack" data-act="atk"><span class="fa-ico">⚔️</span>حمله</button>`);
   atk.addEventListener("click", () => { playerAttack(); });
   box.appendChild(atk);
+  const dash = make(`<button class="fa-btn" data-act="dash"><span class="fa-ico">🌑</span>ضربهٔ سایه</button>`);
+  dash.addEventListener("click", () => {
+    const b2 = battle;
+    if (!b2 || b2.over) return;
+    if (b2.cds.dash && b2.cds.dash > nowMs()) {
+      if (b2.cfg.toast) b2.cfg.toast("هنوز شارژ نشده", "bad");
+      return;
+    }
+    b2.cds.dash = nowMs() + 7000;
+    const { dmg, crit } = calcDamage(b2.cs.atk, b2.enemy.def, b2.cs.crit + 8, 1.55);
+    enemyTake(dmg, crit);
+    b2.ult = Math.min(100, b2.ult + 10);
+    addLog(`ضربهٔ سایه: ${faNum(dmg)}`, "l-gold");
+    sfx.skill();
+    refreshActionCds();
+  });
+  box.appendChild(dash);
 
   const blk = make(`<button class="fa-btn" data-act="block"><span class="fa-ico">🛡️</span>بلوک</button>`);
   blk.addEventListener("click", () => {
@@ -618,10 +635,6 @@ function askFlee() {
   const b = battle;
   if (!b || b.over) return;
   if (b.isDummy) { battle.over = true; hideFight(); return; }
-  const ok = typeof window !== "undefined" && window.confirm
-    ? window.confirm("از نبرد فرار کنی؟ جایزه از دست می‌رود و انرژی برنمی‌گردد.")
-    : true;
-  if (!ok) return;
   battle.over = true;
   addLog("فرار کردی.", "l-bad");
   b.cfg.onExit && b.cfg.onExit();

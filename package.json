@@ -9,6 +9,7 @@
     "test": "node ci/test-engine.mjs",
     "apk:add": "npx cap add android",
     "test:ui": "node ci/test-ui.mjs",
+    "test:deep": "node ci/test-deep.mjs",
     "make-apk": "python3 scripts/make-apk.py",
     "apk": "python3 scripts/make-apk.py"
   },
