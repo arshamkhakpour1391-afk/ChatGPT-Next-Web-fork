@@ -27,20 +27,23 @@
         <p class="auth-sub">سیستم سولو لولینگ — ساختهٔ ارشام · نسخه ۲.۴</p>
       </div>
       <div class="auth-tabs">
-        <button class="auth-tab active" data-authtab="login">ورود</button>
-        <button class="auth-tab" data-authtab="register">ثبت‌نام</button>
+        <button class="auth-tab" data-authtab="login">ورود</button>
+        <button class="auth-tab active" data-authtab="register">ثبت‌نام</button>
       </div>
       <form id="auth-form" class="auth-form">
         <label class="field">
-          <span>نام کاربری <i>(انگلیسی — تا آخر با همین اسم می‌مانی)</i></span>
-          <input id="auth-user" type="text" autocomplete="username" placeholder="مثلا: arsham" maxlength="20">
+          <span>نام کاربری <i>(فقط انگلیسی — مثلا arsham)</i></span>
+          <input id="auth-user" type="text" autocomplete="username" placeholder="arsham" maxlength="20" inputmode="latin">
         </label>
         <label class="field">
-          <span>رمز عبور</span>
-          <input id="auth-pass" type="password" autocomplete="current-password" placeholder="حداقل ۴ حرف" maxlength="64">
+          <span>رمز عبور <i>(حداقل ۴ حرف)</i></span>
+          <div class="pass-wrap">
+            <input id="auth-pass" type="password" autocomplete="new-password" placeholder="••••" maxlength="64">
+            <button type="button" class="pass-toggle" id="auth-pass-toggle" aria-label="نمایش رمز">👁</button>
+          </div>
         </label>
         <p class="auth-err" id="auth-err"></p>
-        <button class="btn btn-primary btn-big" id="auth-submit" type="submit">ورود به سیستم</button>
+        <button class="btn btn-primary btn-big" id="auth-submit" type="submit">ساخت حساب و ورود</button>
         <button class="btn btn-ghost btn-big hidden" id="auth-offline" type="button">بازی آفلاین (بدون حساب)</button>
         <p class="auth-note" id="auth-note"></p>
       </form>

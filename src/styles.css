@@ -7,7 +7,7 @@
   --red:#ff2d55; --orange:#ff8a2a; --gold:#ffc93c; --green:#2eff7e; --cyan:#2ad4ff;
   --grad:linear-gradient(135deg,#4f7cff,#7c5cff 55%,#9b30ff);
   --r:14px; --r-sm:10px;
-  --nav-h:56px; --topbar-h:52px;
+  --nav-h:62px; --topbar-h:52px;
   --shadow:0 8px 30px rgba(0,0,0,.5);
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}

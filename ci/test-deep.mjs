@@ -56,7 +56,7 @@ t("ثبت‌نام محلی بدون ابر وارد بازی می‌شود", ()
 });
 
 const pages = ["home", "missions", "gates", "battle", "shop", "bag", "duel", "chat", "ranks"];
-for (let round = 1; round <= 3; round++) {
+for (let round = 1; round <= 10; round++) {
   t(`دور ${round}: هر ۹ تب باز می‌شود`, () => {
     for (const name of pages) {
       click(qa(".nav-btn").find((b) => b.dataset.page === name));

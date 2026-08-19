@@ -1777,13 +1777,18 @@ export function showInstaller() {
 }
 
 /* ---------- ورود / ثبت‌نام ---------- */
-let authTab = "login";
+let authTab = "register";
 document.querySelectorAll(".auth-tab").forEach((b) => b.addEventListener("click", () => {
   authTab = b.dataset.authtab;
   document.querySelectorAll(".auth-tab").forEach((x) => x.classList.toggle("active", x === b));
-  $("auth-submit").textContent = authTab === "login" ? "ورود به سیستم" : "ساخت حساب جدید";
+  $("auth-submit").textContent = authTab === "login" ? "ورود به سیستم" : "ساخت حساب و ورود";
   $("auth-err").textContent = "";
 }));
+$("auth-pass-toggle")?.addEventListener("click", () => {
+  const inp = $("auth-pass");
+  if (!inp) return;
+  inp.type = inp.type === "password" ? "text" : "password";
+});
 function localAuthFallback(mode, user, pass) {
   const db = lsGet("local_accounts") || {};
   if (mode === "register") {

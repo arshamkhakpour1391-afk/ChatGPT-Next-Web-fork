@@ -47,7 +47,11 @@ export function newState(username, seedStr) {
     seed,
     level: 1, xp: 0, gold: 80, gems: 2, energy: maxEnergy(1),
     stats: { clicks: 0, dayClicks: 0, bestCombo: 0, kills: 0, bosses: 0, dungeons: 0, wins: 0, losses: 0, duels: 0, chatMsgs: 0, skillsUsed: 0, goldEarned: 0, extracts: 0, shopBuys: 0, energyUsed: 0 },
-    items: {}, skillsOwned: {},
+    items: (() => {
+      const pot = SHOP_ITEMS.find((x) => x.effects && x.effects.heal === 30);
+      return pot ? { [pot.id]: 2 } : {};
+    })(),
+    skillsOwned: {},
     equip: { active: [], weapon: null, armor: null, shadows: [], title: null, titleItem: null },
     shadows: {},
     missions: {}, missionSeed: seed,

@@ -48,6 +48,8 @@ export const ARCHETYPES = [
   { key: "mage", name: "جادوگر", atk: 1.12, def: 0.75, hp: 0.9, tag: "مهارت‌های جادویی" },
   { key: "summoner", name: "احضارگر", atk: 0.95, def: 0.95, hp: 1.1, tag: "سایه احضار می‌کند" },
   { key: "venom", name: "زهرآگین", atk: 1.05, def: 0.9, hp: 1.0, tag: "سم مداوم" },
+  { key: "berserk", name: "خشمگین", atk: 1.4, def: 0.65, hp: 0.88, tag: "خشم زودهنگام" },
+  { key: "warden", name: "نگهبان", atk: 0.9, def: 1.25, hp: 1.15, tag: "سپر می‌سازد" },
 ];
 export function archetypeOf(i) { return ARCHETYPES[((i % ARCHETYPES.length) + ARCHETYPES.length) % ARCHETYPES.length]; }
 

@@ -521,6 +521,17 @@ function renderActions() {
     refreshActionCds();
   });
   box.appendChild(dash);
+  const aid = make(`<button class="fa-btn" data-act="aid"><span class="fa-ico">💚</span>شفا</button>`);
+  aid.addEventListener("click", () => {
+    const b2 = battle;
+    if (!b2 || b2.over) return;
+    if (b2.cds.aid && b2.cds.aid > nowMs()) return b2.cfg.toast && b2.cfg.toast("شفا در حال شارژ", "bad");
+    b2.cds.aid = nowMs() + 9000;
+    heal(Math.floor(b2.player.maxHp * 0.18));
+    addLog("شفا فعال شد", "l-good");
+    sfx.coin();
+  });
+  box.appendChild(aid);
 
   const blk = make(`<button class="fa-btn" data-act="block"><span class="fa-ico">🛡️</span>بلوک</button>`);
   blk.addEventListener("click", () => {
