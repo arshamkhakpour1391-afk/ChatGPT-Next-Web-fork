@@ -1912,6 +1912,11 @@ export function showAuth(errMsg) {
     ? `حساب ذخیره‌شده: <b>${esc(acc.username)}</b> — فقط رمز را بزن و وارد شو.`
     : "نام کاربری برای همیشه می‌ماند — خوب انتخاب کن.";
   if (acc && acc.username && !$("auth-user").value) $("auth-user").value = acc.username;
+  if (acc && acc.username) {
+    authTab = "login";
+    document.querySelectorAll(".auth-tab").forEach((x) => x.classList.toggle("active", x.dataset.authtab === "login"));
+    if ($("auth-submit")) $("auth-submit").textContent = "ورود به سیستم";
+  }
   $("auth-note").innerHTML = base;
   $("auth-offline").classList.remove("hidden");
   cloud.checkSchema().then((r) => {
