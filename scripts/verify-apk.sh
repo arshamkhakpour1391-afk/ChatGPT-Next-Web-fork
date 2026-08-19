@@ -4,7 +4,7 @@ set -e
 APK="$(realpath "$1")"
 CERT="$2"
 AAPT2="/usr/local/lib/python3.11/dist-packages/aapt2/bin/Linux/aapt2"
-[ -x "$AAPT2" ] || AAPT2="$(command -v aapt2)"
+[ -x "$AAPT2" ] || AAPT2="$(command -v aapt2 || true)"
 
 echo "== 1) badging =="
 "$AAPT2" dump badging "$APK" 2>/dev/null | grep -E "package:|application-label:|sdkVersion|targetSdkVersion|uses-permission" | head -8

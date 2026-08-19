@@ -1,18 +1,15 @@
 -- ============================================================
 --  سیستم سولو لولینگ — Schema (idempotent, safe to re-run)
 --  ساخته‌شده برای: https://baooyxmxzkzwimitjfjk.supabase.co
+--  ترتیب مهم است: اول جدول‌ها، بعد توابع، بعد RLS
 -- ============================================================
 
--- ---------- helper: current session user ----------
-create or replace function public.current_user_id()
-returns uuid language sql stable as $$
-  select user_id from public.sessions
-  where token = coalesce(current_setting('request.headers', true)::json ->> 'x-session-token', '')
-    and expires_at > now()
-  limit 1;
-$$;
+-- اجازهٔ ارجاع توابع به جدول‌ها (محافظ اضافه)
+set check_function_bodies = off;
 
--- ---------- accounts ----------
+-- ============================================================
+--  جدول‌ها
+-- ============================================================
 create table if not exists public.accounts (
   id uuid primary key default gen_random_uuid(),
   username text not null unique,
@@ -20,7 +17,68 @@ create table if not exists public.accounts (
   created_at timestamptz not null default now()
 );
 
--- no rename ever (username is forever)
+create table if not exists public.sessions (
+  token text primary key,
+  user_id uuid not null references public.accounts(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null
+);
+create index if not exists sessions_user_idx on public.sessions(user_id);
+create index if not exists sessions_exp_idx  on public.sessions(expires_at);
+
+create table if not exists public.players (
+  user_id      uuid primary key references public.accounts(id) on delete cascade,
+  username     text not null,
+  level        int    not null default 1,
+  xp           bigint not null default 0,
+  gold         bigint not null default 150,
+  gems         int    not null default 3,
+  power        bigint not null default 10,
+  wins         int    not null default 0,
+  losses       int    not null default 0,
+  kills        bigint not null default 0,
+  rank_pts     bigint not null default 1000,
+  hunter_class text   not null default 'E',
+  data         jsonb  not null default '{}'::jsonb,
+  updated_at   timestamptz not null default now(),
+  last_seen    timestamptz not null default now()
+);
+
+create table if not exists public.chat_messages (
+  id bigint generated always as identity primary key,
+  room text not null default 'عمومی',
+  user_id uuid,
+  username text not null,
+  kind text not null default 'text',
+  body text not null default '',
+  created_at timestamptz not null default now()
+);
+create index if not exists chat_room_time_idx on public.chat_messages(room, id desc);
+
+create table if not exists public.chat_rooms (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  owner uuid references public.accounts(id) on delete set null,
+  members jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.duels (
+  id uuid primary key default gen_random_uuid(),
+  p1 uuid not null,
+  p1name text not null,
+  p2 uuid,
+  p2name text,
+  mode text not null default 'click',
+  status text not null default 'open',
+  result jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+create index if not exists duels_status_idx on public.duels(status);
+
+-- ============================================================
+--  ممنوعیت تغییر نام کاربری (نام برای همیشه ثابت است)
+-- ============================================================
 create or replace function public.block_username_change()
 returns trigger language plpgsql as $$
 begin
@@ -41,72 +99,19 @@ create trigger players_no_rename
 before update of username on public.players
 for each row execute function public.block_username_change();
 
--- ---------- sessions ----------
-create table if not exists public.sessions (
-  token text primary key,
-  user_id uuid not null references public.accounts(id) on delete cascade,
-  created_at timestamptz not null default now(),
-  expires_at timestamptz not null
-);
-create index if not exists sessions_user_idx on public.sessions(user_id);
-create index if not exists sessions_exp_idx  on public.sessions(expires_at);
-
--- ---------- players ----------
-create table if not exists public.players (
-  user_id      uuid primary key references public.accounts(id) on delete cascade,
-  username     text not null,
-  level        int    not null default 1,
-  xp           bigint not null default 0,
-  gold         bigint not null default 150,
-  gems         int    not null default 3,
-  power        bigint not null default 10,
-  wins         int    not null default 0,
-  losses       int    not null default 0,
-  kills        bigint not null default 0,
-  rank_pts     bigint not null default 1000,
-  hunter_class text   not null default 'E',
-  data         jsonb  not null default '{}'::jsonb,
-  updated_at   timestamptz not null default now(),
-  last_seen    timestamptz not null default now()
-);
-
--- ---------- chat ----------
-create table if not exists public.chat_messages (
-  id bigint generated always as identity primary key,
-  room text not null default 'عمومی',
-  user_id uuid,
-  username text not null,
-  kind text not null default 'text',
-  body text not null default '',
-  created_at timestamptz not null default now()
-);
-create index if not exists chat_room_time_idx on public.chat_messages(room, id desc);
-
-create table if not exists public.chat_rooms (
-  id uuid primary key default gen_random_uuid(),
-  name text not null,
-  owner uuid references public.accounts(id) on delete set null,
-  members jsonb not null default '[]'::jsonb,
-  created_at timestamptz not null default now()
-);
-
--- ---------- duels ----------
-create table if not exists public.duels (
-  id uuid primary key default gen_random_uuid(),
-  p1 uuid not null,
-  p1name text not null,
-  p2 uuid,
-  p2name text,
-  mode text not null default 'click',
-  status text not null default 'open',
-  result jsonb not null default '{}'::jsonb,
-  created_at timestamptz not null default now()
-);
-create index if not exists duels_status_idx on public.duels(status);
-
 -- ============================================================
---  RPC: register / login / state
+--  توابع
 -- ============================================================
+
+-- کاربر جاری از روی توکن هدر x-session-token
+create or replace function public.current_user_id()
+returns uuid language sql stable as $$
+  select user_id from public.sessions
+  where token = coalesce(current_setting('request.headers', true)::json ->> 'x-session-token', '')
+    and expires_at > now()
+  limit 1;
+$$;
+
 create or replace function public.register(p_username text, p_pass text)
 returns json language plpgsql security definer as $$
 declare
@@ -186,9 +191,6 @@ returns void language sql security definer as $$
   where token = coalesce(current_setting('request.headers', true)::json ->> 'x-session-token', '');
 $$;
 
--- ============================================================
---  Leaderboard / online lists (bypass RLS safely)
--- ============================================================
 create or replace function public.leaderboard(p_kind text default 'power', p_lim int default 100)
 returns setof jsonb language sql stable security definer as $$
   select jsonb_build_object(
@@ -304,7 +306,7 @@ end;
 $$;
 
 -- ============================================================
---  RLS
+--  RLS (امنیت)
 -- ============================================================
 alter table public.players enable row level security;
 alter table public.chat_messages enable row level security;
@@ -338,7 +340,7 @@ create policy sessions_sel on public.sessions
   for select to anon, authenticated
   using (user_id = public.current_user_id());
 
--- chat: public read, own write
+-- چت: خواندن عمومی، نوشتن فقط برای خود کاربر
 drop policy if exists chat_read on public.chat_messages;
 create policy chat_read on public.chat_messages
   for select to anon, authenticated using (true);
@@ -362,7 +364,7 @@ create policy rooms_upd on public.chat_rooms
   for update to anon, authenticated
   using (owner = public.current_user_id() or members @> jsonb_build_array(public.current_user_id()));
 
--- duels: public read, own write/update
+-- دوئل‌ها: خواندن عمومی، نوشتن برای خود کاربر
 drop policy if exists duels_read on public.duels;
 create policy duels_read on public.duels
   for select to anon, authenticated using (true);
@@ -382,6 +384,13 @@ create policy duels_upd on public.duels
 -- ============================================================
 do $$
 begin
+  if not exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    create publication supabase_realtime;
+  end if;
+end $$;
+
+do $$
+begin
   alter publication supabase_realtime add table public.chat_messages;
 exception when duplicate_object then null;
 end $$;
@@ -397,7 +406,7 @@ exception when duplicate_object then null;
 end $$;
 
 -- ============================================================
---  Storage: voice messages
+--  Storage: پیام‌های صوتی
 -- ============================================================
 insert into storage.buckets (id, name, public)
 values ('voice', 'voice', true)
@@ -432,5 +441,5 @@ grant select, insert on public.chat_messages to anon, authenticated;
 grant select, insert, update on public.chat_rooms to anon, authenticated;
 grant select, insert, update on public.duels to anon, authenticated;
 
--- refresh postgrest schema cache
+-- تازه‌سازی کش PostgREST
 notify pgrst, 'reload schema';
