@@ -1711,7 +1711,8 @@ $("btn-settings").addEventListener("click", () => {
     title: "تنظیمات",
     body: `
       <div class="m-meta" style="justify-content:space-between"><span>وضعیت ابر: <b>${cloudState}</b></span><span>دیتابیس: <b>${cloud.schemaReady() ? "✅ نصب شده" : "❌ نصب نشده"}</b></span></div>
-      <div class="m-meta" style="justify-content:space-between"><span>حساب: <b>${esc(st.username)}</b></span><span>Solo System ۲.۵</span></div>
+      <div class="m-meta" style="justify-content:space-between"><span>حساب: <b>${esc(st.username)}</b></span><span>Solo System ۲.۶</span></div>
+      <div class="m-meta"><span>همگام ابر: <b>${app.isCloud && app.isCloud() ? "فعال — مهارت و آمار کامل" : "محلی (وقتی اینترنت باشد می‌رود روی ابر)"}</b></span></div>
       <p style="margin-top:10px">ساختهٔ ارشام — داده‌ها روی ابر و دستگاه می‌مانند.</p>
       <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px">
         <button class="btn btn-ghost btn-sm" id="set-sound">${isMuted() ? "🔊 روشن کردن صدا" : "🔇 خاموش کردن صدا"}</button>
@@ -1864,18 +1865,6 @@ async function doAuth() {
   try {
     cloud.initCloud?.();
     const locals = lsGet("local_accounts") || {};
-    if (locals[user] && locals[user].pass === pass) {
-      const local = localAuthFallback("login", user, pass);
-      await app.onAuthed(local, pass);
-      cloud.login(user, pass).then((cr) => {
-        if (cr && cr.token && !cr.error) {
-          const acc = lsGet("account") || {};
-          lsSet("account", { ...acc, token: cr.token, pass });
-          cloud.setSession(cr.token);
-        }
-      }).catch(() => {});
-      return;
-    }
     let r = { error: "no" };
     try {
       r = authTab === "login" ? await cloud.login(user, pass) : await cloud.register(user, pass);

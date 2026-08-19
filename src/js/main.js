@@ -1,6 +1,6 @@
 /* ================= نقطهٔ شروع برنامه ================= */
 import { el, lsGet, lsSet, lsDel, debounce, nowMs, todayKey, deepClone, notifyLocal, sfx, requestNotifPermission, faNum, initMute } from "./util.js";
-import { newState, computePower, tickState, maxEnergy, STATE_VERSION, missionBucket, applyProgress, dailyQuests, regenEnergy, migrateState } from "./engine.js";
+import { newState, computePower, tickState, maxEnergy, STATE_VERSION, missionBucket, applyProgress, dailyQuests, regenEnergy, migrateState, packCloudState } from "./engine.js";
 import { hunterClass } from "./data.js";
 import { MISSION_INTERVAL_MS, missionOf } from "./data.js";
 import * as cloud from "./cloud.js";
@@ -28,18 +28,52 @@ function pickRicher(a, b) {
   const score = (s) => (s.level || 1) * 10000 + (s.stats?.clicks || 0) + (s.gold || 0);
   return score(a) >= score(b) ? a : b;
 }
+let lastCloudSync = 0;
+function isLocalAcc(acc) {
+  const a = acc || account;
+  return !a || String(a.token || "").startsWith("local-") || String(a.userId || "").startsWith("loc_");
+}
+async function upgradeToCloud() {
+  if (offlineMode || !account || !account.pass || !account.username) return false;
+  if (!isLocalAcc(account)) return true;
+  try {
+    let r = await cloud.login(account.username, account.pass);
+    if (r.error) r = await cloud.register(account.username, account.pass);
+    if (r.error && /قبلا|taken|exists|ثبت شده/i.test(String(r.error))) r = await cloud.login(account.username, account.pass);
+    if (r.error || !r.token) return false;
+    const oldId = account.userId;
+    const uid = r.user_id || r.userId;
+    account = { username: account.username, pass: account.pass, token: r.token, userId: uid };
+    cloud.setSession(r.token);
+    window.__sls_userId = uid;
+    lsSet("account", account);
+    lsSet("lastUser", uid);
+    if (oldId && oldId !== uid && st) lsSet(stateKey(uid), st);
+    onlineStarted = false;
+    startOnlineServices();
+    return true;
+  } catch (e) { return false; }
+}
 const pushCloud = debounce(async () => {
-  if (offlineMode || !account) return;
+  if (offlineMode || !account || !st) return;
+  if (isLocalAcc(account)) {
+    const ok = await upgradeToCloud();
+    if (!ok) return;
+  }
+  const packed = packCloudState(st);
+  packed.power = computePower(st);
+  packed.hunterClass = hunterClass(st.level).name;
   const cols = {
     userId: account.userId,
     username: st.username,
     level: st.level, xp: st.xp, gold: st.gold, gems: st.gems,
-    power: computePower(st), wins: st.stats.wins, losses: st.stats.losses,
+    power: packed.power, wins: st.stats.wins, losses: st.stats.losses,
     kills: st.stats.kills, rankPts: st.rank_pts ?? 1000,
-    hunterClass: hunterClass(st.level).name,
+    hunterClass: packed.hunterClass,
   };
-  const r = await cloud.savePlayer(st, cols);
-  if (!r.ok && r.error) console.warn("cloud save:", r.error?.message || r.error);
+  const r = await cloud.savePlayer(packed, cols);
+  if (r.ok) { lastCloudSync = nowMs(); st.cloudAt = lastCloudSync; }
+  else if (r.error) console.warn("cloud save:", r.error?.message || r.error);
 }, 700);
 
 function save() {
@@ -128,6 +162,7 @@ async function autoLogin() {
     }
     if (String(acc.token || "").startsWith("local-") || String(acc.userId).startsWith("loc_")) {
       bootLocal(acc);
+      upgradeToCloud().then((ok) => { if (ok && st) saveNow(); }).catch(() => {});
       return;
     }
     cloud.setSession(acc.token);
@@ -350,7 +385,8 @@ const appObj = {
   save: () => save(),
   saveNow: () => saveNow(),
   isLoggedIn: () => !!account && !offlineMode,
-  isCloud: () => !!(account && !offlineMode && account.token && !String(account.token).startsWith("local-") && !String(account.userId || "").startsWith("loc_")),
+  isCloud: () => !!(account && !offlineMode && !isLocalAcc(account)),
+  lastCloudSync: () => lastCloudSync,
   myUserId: () => account?.userId || null,
   onAuthed,
   onOfflineMode,

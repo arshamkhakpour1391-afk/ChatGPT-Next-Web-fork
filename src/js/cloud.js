@@ -102,8 +102,16 @@ function friendlyError(e) {
 
 /* ---------- ذخیره / بارگذاری ---------- */
 export async function savePlayer(state, cols) {
-  if (!sb || !cols.userId) return { ok: false };
+  if (!sb || !cols || !cols.userId) return { ok: false };
+  if (String(cols.userId).startsWith("loc_")) return { ok: false, error: "local-only" };
+  const packed = state && typeof state === "object" ? { ...state, power: cols.power, hunterClass: cols.hunterClass } : {};
   try {
+    const rpc = await withTimeout(sb.rpc("save_full_state", { p_data: packed }), 15000);
+    if (!rpc.error && rpc.data && !rpc.data.error) {
+      online = true;
+      emit("status", { online: true });
+      return { ok: true };
+    }
     const { error } = await withTimeout(
       sb.from("players").upsert({
         user_id: cols.userId,
@@ -111,8 +119,9 @@ export async function savePlayer(state, cols) {
         level: cols.level, xp: cols.xp, gold: cols.gold, gems: cols.gems,
         power: cols.power, wins: cols.wins, losses: cols.losses, kills: cols.kills,
         rank_pts: cols.rankPts, hunter_class: cols.hunterClass,
-        data: state, updated_at: new Date().toISOString(), last_seen: new Date().toISOString()
-      }, { onConflict: "user_id" })
+        data: packed, updated_at: new Date().toISOString(), last_seen: new Date().toISOString()
+      }, { onConflict: "user_id" }),
+      15000
     );
     online = !error;
     if (error) { emit("status", { online: false }); return { ok: false, error }; }
@@ -121,12 +130,18 @@ export async function savePlayer(state, cols) {
   } catch (e) {
     online = false;
     emit("status", { online: false });
-    return { ok: false };
+    return { ok: false, error: e };
   }
 }
 export async function loadPlayer(userId) {
   if (!sb) return { error: "no client" };
   try {
+    const rpc = await withTimeout(sb.rpc("load_full_state"), 12000);
+    if (!rpc.error && rpc.data && rpc.data.player) {
+      online = true;
+      return { player: rpc.data.player };
+    }
+    if (!userId || String(userId).startsWith("loc_")) return { player: rpc?.data?.player || null, error: rpc?.error };
     const { data, error } = await withTimeout(
       sb.from("players").select("*").eq("user_id", userId).maybeSingle()
     );

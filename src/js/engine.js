@@ -10,6 +10,20 @@ import {
 
 export const STATE_VERSION = 4;
 
+export function packCloudState(st) {
+  if (!st || typeof st !== "object") return {};
+  const copy = deepClone(st);
+  delete copy.pendingPunish;
+  delete copy.pendingLogin;
+  delete copy.pendingTitles;
+  if (Array.isArray(copy.events) && copy.events.length > 80) copy.events = copy.events.slice(0, 80);
+  if (Array.isArray(copy.duelLog) && copy.duelLog.length > 40) copy.duelLog = copy.duelLog.slice(0, 40);
+  if (copy.punish && Array.isArray(copy.punish.history) && copy.punish.history.length > 50) copy.punish.history = copy.punish.history.slice(0, 50);
+  copy.v = STATE_VERSION;
+  copy.updatedAt = nowMs();
+  return copy;
+}
+
 export function migrateState(st) {
   if (!st || typeof st !== "object") return st;
   st.v = STATE_VERSION;

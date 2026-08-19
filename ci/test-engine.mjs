@@ -8,7 +8,7 @@ import {
   dailyQuests, claimDailyQuest, applyPunishment, activeDebuffs, tickState, yearState,
   claimYearDay, currentPicks, takePick, addRewardPick, missionBucket, calcDamage, newShadow, dailyDeals,
   claimDailyLogin, unlockTitles, addRankPts, regenEnergy, addBuff, activeBuffs, autoEquipBest, claimAllReady, dailyFeatured, achievementsOf,
-  spendStat, upgradeShadow, fuseShadows, sweepDungeon, markFailedMission, comboMult, battleAtkCd, energyCap, migrateState, featuredMult, firstClearMult
+  spendStat, upgradeShadow, fuseShadows, sweepDungeon, markFailedMission, comboMult, battleAtkCd, energyCap, migrateState, featuredMult, firstClearMult, packCloudState
 } from "../src/js/engine.js";
 import {
   dungeonIndex, bossIndex, skillIndex, DUNGEON_COUNT, BOSS_COUNT, SKILL_COUNT,
@@ -348,6 +348,19 @@ t("مهاجرت ذخیره بعد از بستن برنامه", () => {
   const m = migrateState({ level: 4, gold: 20, stats: { clicks: 9 } });
   assert.equal(m.v, 4);
   assert.ok(m.settings && m.spent && m.login);
+});
+t("بستهٔ ابر مهارت و آمار را کامل نگه می‌دارد", () => {
+  const st = newState("t", "s");
+  st.skillsOwned[3] = true;
+  st.equip.active = [3];
+  st.spent.atk = 2;
+  extractShadow(st, { name: "x", rankKey: "S", power: 80, emoji: "💀", baseChance: 1.1 });
+  const p = packCloudState(st);
+  assert.ok(p.skillsOwned[3]);
+  assert.deepEqual(p.equip.active, [3]);
+  assert.equal(p.spent.atk, 2);
+  assert.ok(Object.keys(p.shadows).length === 1);
+  assert.ok(p.stats && p.items);
 });
 
 console.log(`\n=== نتیجه: ${passed} موفق، ${failed} ناموفق ===`);
