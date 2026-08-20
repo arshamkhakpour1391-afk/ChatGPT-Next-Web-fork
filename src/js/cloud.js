@@ -404,3 +404,78 @@ export function stopHeartbeat() {
   if (heartbeatTimer) clearInterval(heartbeatTimer);
   heartbeatTimer = null;
 }
+
+/* ---------- دوستی / اعلان / FFA ---------- */
+export async function friendRequest(username) {
+  try {
+    const { data, error } = await withTimeout(sb.rpc("friend_request", { p_username: username }));
+    if (error) return { error: friendlyError(error) };
+    const out = unwrapRpc(data);
+    if (out && out.error) return { error: out.error };
+    return out || { ok: true };
+  } catch (e) { return { error: "خطای شبکه" }; }
+}
+export async function friendAccept(userId) {
+  try {
+    const { data, error } = await withTimeout(sb.rpc("friend_accept", { p_user: userId }));
+    if (error) return { error: friendlyError(error) };
+    return unwrapRpc(data) || { ok: true };
+  } catch (e) { return { error: "خطای شبکه" }; }
+}
+export async function friendList() {
+  try {
+    const { data, error } = await withTimeout(sb.rpc("friend_list"));
+    if (error) return { error, list: [] };
+    return { list: data || [] };
+  } catch (e) { return { error: e, list: [] }; }
+}
+export async function notifList() {
+  try {
+    const { data, error } = await withTimeout(sb.rpc("notif_list"));
+    if (error) return { error, list: [] };
+    return { list: data || [] };
+  } catch (e) { return { error: e, list: [] }; }
+}
+export async function notifReadAll() {
+  try { await withTimeout(sb.rpc("notif_read_all")); } catch (e) {}
+}
+export async function ffaCreate(name) {
+  try {
+    const { data, error } = await withTimeout(sb.rpc("ffa_create", { p_name: name || "FFA" }));
+    if (error) return { error: friendlyError(error) };
+    const out = unwrapRpc(data);
+    if (out && out.error) return { error: out.error };
+    return out;
+  } catch (e) { return { error: "خطای شبکه" }; }
+}
+export async function ffaJoin(code) {
+  try {
+    const { data, error } = await withTimeout(sb.rpc("ffa_join", { p_code: code }));
+    if (error) return { error: friendlyError(error) };
+    const out = unwrapRpc(data);
+    if (out && out.error) return { error: out.error };
+    return out;
+  } catch (e) { return { error: "خطای شبکه" }; }
+}
+export async function ffaInvite(code, username) {
+  try {
+    const { data, error } = await withTimeout(sb.rpc("ffa_invite", { p_code: code, p_username: username }));
+    if (error) return { error: friendlyError(error) };
+    return unwrapRpc(data) || { ok: true };
+  } catch (e) { return { error: "خطای شبکه" }; }
+}
+export async function ffaList() {
+  try {
+    const { data, error } = await withTimeout(sb.rpc("ffa_list"));
+    if (error) return { error, list: [] };
+    return { list: data || [] };
+  } catch (e) { return { error: e, list: [] }; }
+}
+export function broadcastFfa(code, event, payload) {
+  const ch = getBroadcastChannel("ffa-" + code);
+  if (ch) ch.send({ type: "broadcast", event, payload });
+}
+export function onFfaBroadcast(code, fn) {
+  const ch = getBroadcastChannel("ffa-" + code);
+  if (ch) ch.on("broadcast", {}, (e) => fn(e.event, e.payload));
+}

@@ -365,7 +365,7 @@ export const SHOP_ITEMS = (() => {
   add("potion", "معجون پاری", "🧪", "بلوک بعدی پاری کامل است", { gold: 280, gem: null }, { parry: 1 });
   return items;
 })();
-export const CATALOG_COUNT = 10000;
+export const CATALOG_COUNT = 100000;
 export const CATALOG_BASE = 100000;
 const CAT_KEYS = ["weapon", "armor", "potion", "scroll", "stone", "title", "special"];
 const CAT_ICONS = { weapon: "⚔️", armor: "🛡️", potion: "🧪", scroll: "📜", stone: "🔮", title: "🏅", special: "💎" };
@@ -425,6 +425,12 @@ export function itemById(id) {
   if (hit) return hit;
   if (n >= CATALOG_BASE && n < CATALOG_BASE + CATALOG_COUNT) return catalogIndex(n - CATALOG_BASE);
   return undefined;
+}
+export function verifyItem(it) {
+  if (!it || !it.id || !it.name || !it.cat) return false;
+  if (!it.price || (it.price.gold == null && it.price.gem == null)) return false;
+  if (!it.effects || typeof it.effects !== "object") return false;
+  return String(it.name).length > 1;
 }
 export function shopListForCat(cat, extra = 24) {
   const base = SHOP_ITEMS.filter((it) => it.cat === cat);

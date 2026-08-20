@@ -1226,6 +1226,24 @@ export function hideClickDuel() {
 }
 
 /* ---------- پاکسازی ---------- */
+export function openFfaArena(cfg) {
+  const dummy = { id: "wait", name: "منتظر بازیکن", level: 1, power: 10 };
+  openShooterDuel({
+    duelId: "ffa-" + (cfg.code || "x"),
+    me: cfg.me,
+    opp: dummy,
+    isHost: !!cfg.isHost,
+    send: cfg.send || (() => {}),
+    onEnd: cfg.onEnd,
+    localTest: true,
+    ffa: true,
+    toast: cfg.toast,
+  });
+  if (el("shooter-vs")) el("shooter-vs").textContent = `FFA ${cfg.code || ""} — تا ۱۰۰ نفر`;
+  if (el("shooter-time")) el("shooter-time").textContent = "۱۸۰";
+  if (shooter) shooter.time = 180;
+}
+
 export function cleanup() {
   cancelAnimationFrame(rafId);
   if (battle) { battle.over = true; battle = null; }

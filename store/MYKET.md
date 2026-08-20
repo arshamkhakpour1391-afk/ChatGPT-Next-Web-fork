@@ -5,8 +5,8 @@
 - نام نمایشی: `solo system`
 - نام انگلیسی: `Solo System`
 - پکیج: `com.arsham.solosystem`
-- versionCode: `30`
-- versionName: `3.0.0`
+- versionCode: `31`
+- versionName: `3.1.0`
 - minSdk: ۲۲ (اندروید ۵.۱+)
 - targetSdk / compileSdk: ۳۴
 - سازنده: ارشام

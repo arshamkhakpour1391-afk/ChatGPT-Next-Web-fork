@@ -24,7 +24,7 @@
           <svg class="auth-sword" viewBox="0 0 64 64"><path d="M32 6 L38 26 L56 30 L38 34 L32 58 L26 34 L8 30 L26 26 Z" fill="#7c5cff"/><path d="M32 6 L38 26 L32 30 Z" fill="#c7b8ff"/></svg>
         </div>
         <h1 class="auth-title">Solo System</h1>
-        <p class="auth-sub">سیستم سولو لولینگ — ساختهٔ ارشام · نسخه ۳.۰</p>
+        <p class="auth-sub">سیستم سولو لولینگ — ساختهٔ ارشام · نسخه ۳.۱</p>
       </div>
       <div class="auth-tabs">
         <button class="auth-tab" data-authtab="login">ورود</button>
@@ -173,7 +173,7 @@
 
       <!-- ===== تب فروشگاه ===== -->
       <div class="page" data-page="shop">
-        <div class="page-head"><h2>🛒 فروشگاه</h2><p id="shop-refresh">۱۰٬۰۰۰ وسیله + تخفیف روزانه</p></div>
+        <div class="page-head"><h2>🛒 فروشگاه</h2><p id="shop-refresh">۱۰۰٬۰۰۰ وسیله + تخفیف روزانه</p></div>
         <div class="sort-bar" id="shop-sort"></div>
         <div class="shop-tabs" id="shop-tabs"></div>
         <div class="deal-strip" id="deal-strip"></div>
@@ -190,11 +190,14 @@
 
       <!-- ===== تب رقابت ===== -->
       <div class="page" data-page="duel">
-        <div class="page-head"><h2>🥊 رقابت</h2><p>حریف واقعی — ربات نیست</p></div>
+        <div class="page-head"><h2>🥊 رقابت</h2><p>۱v۱ یا FFA تا ۱۰۰ نفر — دعوت دوست</p></div>
         <div class="duel-actions">
           <button class="btn btn-primary" id="btn-queue">یافتن حریف (مسابقه سریع)</button>
+          <button class="btn btn-gold" id="btn-ffa">FFA تا ۱۰۰ نفر</button>
           <span class="chip chip-blue" id="queue-status">آمادهٔ مبارزه</span>
         </div>
+        <div class="card"><div class="card-head"><h3>لابی FFA</h3><span class="chip chip-purple" id="ffa-count">۰ لابی</span></div>
+        <div class="list" id="ffa-list"></div></div>
         <div class="card"><div class="card-head"><h3>بازیکنان آنلاین</h3><span class="chip chip-green" id="online-count">۰ آنلاین</span></div>
         <div class="list" id="online-list"></div></div>
         <div class="card"><div class="card-head"><h3>مسابقات باز</h3></div>
@@ -212,6 +215,8 @@
             <button class="room-btn" data-room="دروازه‌ها">دروازه‌ها</button>
             <div id="chat-groups"></div>
             <button class="btn btn-ghost btn-sm" id="btn-new-group">+ ساخت گروه</button>
+            <button class="btn btn-ghost btn-sm" id="btn-add-friend">+ دوست</button>
+            <div id="friend-list"></div>
           </aside>
           <section class="chat-main">
             <div class="chat-head"><h3 id="chat-room-title">عمومی</h3><div class="chat-head-actions">

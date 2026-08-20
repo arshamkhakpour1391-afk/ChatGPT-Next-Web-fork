@@ -519,6 +519,213 @@ end;
 $$;
 
 -- ============================================================
+--  دوستی، اعلان، لابی FFA (تا ۱۰۰ نفر)
+-- ============================================================
+create table if not exists public.friends (
+  user_id uuid not null references public.accounts(id) on delete cascade,
+  friend_id uuid not null references public.accounts(id) on delete cascade,
+  status text not null default 'pending',
+  created_at timestamptz not null default now(),
+  primary key (user_id, friend_id)
+);
+create index if not exists friends_friend_idx on public.friends(friend_id);
+
+create table if not exists public.notifs (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references public.accounts(id) on delete cascade,
+  kind text not null default 'info',
+  title text not null,
+  body text not null default '',
+  payload jsonb not null default '{}'::jsonb,
+  read boolean not null default false,
+  created_at timestamptz not null default now()
+);
+create index if not exists notifs_user_idx on public.notifs(user_id, id desc);
+
+create table if not exists public.ffa_rooms (
+  id uuid primary key default gen_random_uuid(),
+  code text not null unique,
+  name text not null,
+  owner uuid not null references public.accounts(id) on delete cascade,
+  status text not null default 'open',
+  max_players int not null default 100,
+  members jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now()
+);
+create index if not exists ffa_status_idx on public.ffa_rooms(status);
+
+alter table public.friends enable row level security;
+alter table public.notifs enable row level security;
+alter table public.ffa_rooms enable row level security;
+
+drop policy if exists friends_sel on public.friends;
+create policy friends_sel on public.friends for select to anon, authenticated
+  using (user_id = public.current_user_id() or friend_id = public.current_user_id());
+drop policy if exists friends_ins on public.friends;
+create policy friends_ins on public.friends for insert to anon, authenticated
+  with check (user_id = public.current_user_id());
+drop policy if exists friends_upd on public.friends;
+create policy friends_upd on public.friends for update to anon, authenticated
+  using (user_id = public.current_user_id() or friend_id = public.current_user_id());
+
+drop policy if exists notifs_sel on public.notifs;
+create policy notifs_sel on public.notifs for select to anon, authenticated
+  using (user_id = public.current_user_id());
+drop policy if exists notifs_upd on public.notifs;
+create policy notifs_upd on public.notifs for update to anon, authenticated
+  using (user_id = public.current_user_id());
+
+drop policy if exists ffa_sel on public.ffa_rooms;
+create policy ffa_sel on public.ffa_rooms for select to anon, authenticated using (true);
+drop policy if exists ffa_ins on public.ffa_rooms;
+create policy ffa_ins on public.ffa_rooms for insert to anon, authenticated
+  with check (owner = public.current_user_id());
+drop policy if exists ffa_upd on public.ffa_rooms;
+create policy ffa_upd on public.ffa_rooms for update to anon, authenticated using (true);
+
+create or replace function public.push_notif(p_user uuid, p_kind text, p_title text, p_body text, p_payload jsonb default '{}'::jsonb)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if p_user is null then return; end if;
+  insert into public.notifs (user_id, kind, title, body, payload) values (p_user, coalesce(p_kind,'info'), coalesce(p_title,''), coalesce(p_body,''), coalesce(p_payload,'{}'::jsonb));
+end;
+$$;
+
+create or replace function public.friend_request(p_username text)
+returns json language plpgsql security definer set search_path = public as $$
+declare
+  v_me uuid := public.current_user_id();
+  v_other uuid;
+  v_myname text;
+begin
+  if v_me is null then return json_build_object('error', 'ابتدا وارد شوید'); end if;
+  p_username := trim(lower(p_username));
+  select id into v_other from public.accounts where username = p_username;
+  if v_other is null then return json_build_object('error', 'این نام کاربری پیدا نشد'); end if;
+  if v_other = v_me then return json_build_object('error', 'نمی‌توانی خودت را اضافه کنی'); end if;
+  insert into public.friends (user_id, friend_id, status) values (v_me, v_other, 'pending')
+  on conflict (user_id, friend_id) do nothing;
+  select username into v_myname from public.players where user_id = v_me;
+  perform public.push_notif(v_other, 'friend', 'درخواست دوستی', coalesce(v_myname,'شکارچی') || ' می‌خواهد دوستت شود', jsonb_build_object('from', v_me));
+  return json_build_object('ok', true);
+end;
+$$;
+
+create or replace function public.friend_accept(p_user uuid)
+returns json language plpgsql security definer set search_path = public as $$
+declare
+  v_me uuid := public.current_user_id();
+begin
+  if v_me is null then return json_build_object('error', 'ابتدا وارد شوید'); end if;
+  update public.friends set status = 'accepted' where user_id = p_user and friend_id = v_me;
+  insert into public.friends (user_id, friend_id, status) values (v_me, p_user, 'accepted')
+  on conflict (user_id, friend_id) do update set status = 'accepted';
+  perform public.push_notif(p_user, 'friend', 'دوستی قبول شد', 'حالا می‌توانید با هم FFA بازی کنید', '{}'::jsonb);
+  return json_build_object('ok', true);
+end;
+$$;
+
+create or replace function public.friend_list()
+returns setof jsonb language sql stable security definer set search_path = public as $$
+  select jsonb_build_object(
+    'user_id', p.user_id, 'username', p.username, 'level', p.level, 'power', p.power,
+    'status', f.status, 'last_seen', p.last_seen
+  )
+  from public.friends f
+  join public.players p on p.user_id = f.friend_id
+  where f.user_id = public.current_user_id()
+  order by f.status desc, p.last_seen desc
+  limit 200;
+$$;
+
+create or replace function public.notif_list()
+returns setof jsonb language sql stable security definer set search_path = public as $$
+  select jsonb_build_object('id', id, 'kind', kind, 'title', title, 'body', body, 'payload', payload, 'read', read, 'created_at', created_at)
+  from public.notifs where user_id = public.current_user_id()
+  order by id desc limit 80;
+$$;
+
+create or replace function public.notif_read_all()
+returns json language plpgsql security definer set search_path = public as $$
+begin
+  update public.notifs set read = true where user_id = public.current_user_id() and read = false;
+  return json_build_object('ok', true);
+end;
+$$;
+
+create or replace function public.ffa_create(p_name text)
+returns json language plpgsql security definer set search_path = public as $$
+declare
+  v_me uuid := public.current_user_id();
+  v_code text;
+  v_id uuid := gen_random_uuid();
+  v_name text;
+begin
+  if v_me is null then return json_build_object('error', 'ابتدا وارد شوید'); end if;
+  v_name := coalesce(nullif(trim(p_name), ''), 'FFA');
+  v_code := upper(substr(replace(v_id::text, '-', ''), 1, 6));
+  insert into public.ffa_rooms (id, code, name, owner, members)
+  values (v_id, v_code, v_name, v_me, jsonb_build_array(v_me));
+  return json_build_object('ok', true, 'id', v_id, 'code', v_code, 'name', v_name);
+end;
+$$;
+
+create or replace function public.ffa_join(p_code text)
+returns json language plpgsql security definer set search_path = public as $$
+declare
+  v_me uuid := public.current_user_id();
+  v_row public.ffa_rooms%rowtype;
+begin
+  if v_me is null then return json_build_object('error', 'ابتدا وارد شوید'); end if;
+  select * into v_row from public.ffa_rooms where code = upper(trim(p_code)) and status = 'open';
+  if not found then return json_build_object('error', 'لابی پیدا نشد یا بسته است'); end if;
+  if jsonb_array_length(v_row.members) >= v_row.max_players then
+    return json_build_object('error', 'لابی پر است (۱۰۰ نفر)');
+  end if;
+  update public.ffa_rooms set members = members || jsonb_build_array(v_me)
+  where id = v_row.id and not members @> jsonb_build_array(v_me);
+  return json_build_object('ok', true, 'id', v_row.id, 'code', v_row.code, 'name', v_row.name);
+end;
+$$;
+
+create or replace function public.ffa_invite(p_code text, p_username text)
+returns json language plpgsql security definer set search_path = public as $$
+declare
+  v_me uuid := public.current_user_id();
+  v_other uuid;
+  v_myname text;
+begin
+  if v_me is null then return json_build_object('error', 'ابتدا وارد شوید'); end if;
+  select id into v_other from public.accounts where username = trim(lower(p_username));
+  if v_other is null then return json_build_object('error', 'بازیکن پیدا نشد'); end if;
+  select username into v_myname from public.players where user_id = v_me;
+  perform public.push_notif(v_other, 'ffa', 'دعوت FFA', coalesce(v_myname,'شکارچی') || ' تو را به لابی ' || upper(trim(p_code)) || ' دعوت کرد', jsonb_build_object('code', upper(trim(p_code))));
+  return json_build_object('ok', true);
+end;
+$$;
+
+create or replace function public.ffa_list()
+returns setof jsonb language sql stable security definer set search_path = public as $$
+  select jsonb_build_object(
+    'id', id, 'code', code, 'name', name, 'owner', owner, 'status', status,
+    'count', jsonb_array_length(members), 'max_players', max_players, 'created_at', created_at
+  )
+  from public.ffa_rooms where status = 'open' and created_at > now() - interval '6 hours'
+  order by created_at desc limit 40;
+$$;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.notifs;
+exception when duplicate_object then null;
+end $$;
+do $$
+begin
+  alter publication supabase_realtime add table public.ffa_rooms;
+exception when duplicate_object then null;
+end $$;
+
+-- ============================================================
 --  Grants
 -- ============================================================
 grant usage on schema public to anon, authenticated;

@@ -13,7 +13,7 @@ import {
 import {
   dungeonIndex, bossIndex, skillIndex, DUNGEON_COUNT, BOSS_COUNT, SKILL_COUNT,
   SHOP_ITEMS, SHOP_CATS, itemById, itemByName, yearQuestDay, YEAR_DAYS, missionOf,
-  ARCHETYPES, elementMult, CATALOG_COUNT, catalogIndex, shopListForCat
+  ARCHETYPES, elementMult, CATALOG_COUNT, catalogIndex, shopListForCat, verifyItem
 } from "../src/js/data.js";
 
 let passed = 0, failed = 0;
@@ -362,11 +362,14 @@ t("بستهٔ ابر مهارت و آمار را کامل نگه می‌دارد
   assert.ok(Object.keys(p.shadows).length === 1);
   assert.ok(p.stats && p.items);
 });
-t("کاتالوگ ۱۰هزار وسیله قطعی است", () => {
-  assert.equal(CATALOG_COUNT, 10000);
+t("کاتالوگ ۱۰۰هزار وسیله معتبر است", () => {
+  assert.equal(CATALOG_COUNT, 100000);
   const a = catalogIndex(7);
   assert.equal(catalogIndex(7).id, a.id);
+  assert.ok(verifyItem(a));
   assert.ok(itemById(a.id) && itemById(a.id).name === a.name);
+  [0, 1, 99, 12345, 50000, 99999].forEach((i) => assert.ok(verifyItem(catalogIndex(i)), "item " + i));
+  SHOP_ITEMS.forEach((it) => assert.ok(verifyItem(it), "shop " + it.id));
   const weps = shopListForCat("weapon", 12);
   assert.ok(weps.length > 25);
   assert.equal(weps[0].id, SHOP_ITEMS.find((x) => x.cat === "weapon").id);
