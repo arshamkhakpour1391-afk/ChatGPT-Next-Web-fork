@@ -1,4 +1,4 @@
-/* ================= تولید محتوای بازی (۱۰هزار دانجن، ۱۰۰۰ باس، ۱۰۰۰ مهارت، ۱۰۰۰ ماموریت، ۱۰۰+ آیتم) ================= */
+/* ================= تولید محتوای بازی (۱۰هزار دانجن، ۱۰۰۰ باس، ۱۰هزار تکنیک، ۱۰هزار وسیله) ================= */
 import { mulberry32, seedOf, pick, range, hashStr } from "./util.js";
 
 export const RANKS = [
@@ -173,8 +173,8 @@ function makeBossLore(rng, nm, ep, level) {
   return pick(rng, parts) + (level >= 500 ? " قدرت او فراتر از هر چیزی است که تا حالا دیده‌ای." : "");
 }
 
-/* ---------- مهارت‌ها (۱۰۰۰) ---------- */
-export const SKILL_COUNT = 1000;
+/* ---------- مهارت‌ها / تکنیک‌ها (۱۰٬۰۰۰) — SK_TYPES ثابت می‌ماند ---------- */
+export const SKILL_COUNT = 10000;
 const SK_TYPES = [
   { key: "dmg",   name: "آسیب",   icon: "⚔️", passive: false },
   { key: "crit",  name: "کریت",   icon: "💥", passive: true },
@@ -365,7 +365,76 @@ export const SHOP_ITEMS = (() => {
   add("potion", "معجون پاری", "🧪", "بلوک بعدی پاری کامل است", { gold: 280, gem: null }, { parry: 1 });
   return items;
 })();
-export function itemById(id) { return SHOP_ITEMS.find((x) => x.id === id); }
+export const CATALOG_COUNT = 10000;
+export const CATALOG_BASE = 100000;
+const CAT_KEYS = ["weapon", "armor", "potion", "scroll", "stone", "title", "special"];
+const CAT_ICONS = { weapon: "⚔️", armor: "🛡️", potion: "🧪", scroll: "📜", stone: "🔮", title: "🏅", special: "💎" };
+const GEAR_ADJ = ["کهن", "سایه‌دار", "یخ‌زده", "آتشین", "نفرین‌شده", "درخشان", "شکسته", "پادشاهی", "گم‌شده", "سمی", "رعدآسا", "شب‌گونه"];
+const GEAR_NOUN = ["تیغ", "نیزه", "خنجر", "تبر", "کمان", "داس", "زره", "سپر", "شنل", "تاج", "انگشتر", "گردن‌آویز", "معجون", "طومار", "سنگ", "بلور"];
+export function catalogIndex(i) {
+  i = ((i % CATALOG_COUNT) + CATALOG_COUNT) % CATALOG_COUNT;
+  const rng = mulberry32(seedOf("catalog", i));
+  const cat = CAT_KEYS[i % CAT_KEYS.length];
+  const adj = GEAR_ADJ[Math.floor(rng() * GEAR_ADJ.length)];
+  const noun = GEAR_NOUN[Math.floor(rng() * GEAR_NOUN.length)];
+  const tier = Math.min(8, Math.floor(i / 1250));
+  const name = `${noun} ${adj} #${i + 1}`;
+  const icon = CAT_ICONS[cat];
+  let effects = {}, desc = "", price = { gold: 80 + i * 3, gem: null };
+  if (cat === "weapon") {
+    const atk = 12 + tier * 18 + Math.floor(rng() * 14);
+    effects = { atk, type: "weapon" };
+    desc = `حمله +${atk}`;
+    price = { gold: Math.floor(90 * Math.pow(1.12, Math.min(40, tier * 5 + (i % 20)))), gem: null };
+  } else if (cat === "armor") {
+    const def = 8 + tier * 12 + Math.floor(rng() * 10);
+    effects = { def, type: "armor" };
+    desc = `دفاع +${def}`;
+    price = { gold: Math.floor(70 * Math.pow(1.12, Math.min(40, tier * 5 + (i % 20)))), gem: null };
+  } else if (cat === "potion") {
+    const heal = 20 + (i % 5) * 15;
+    effects = { heal };
+    desc = `جان +${heal}٪ در نبرد`;
+    price = { gold: 40 + heal * 2, gem: null };
+  } else if (cat === "scroll") {
+    const xp = 150 + tier * 400;
+    effects = { xp };
+    desc = `XP فوری: ${xp}`;
+    price = { gold: 50 + Math.floor(xp * 0.08), gem: null };
+  } else if (cat === "stone") {
+    const boost = 4 + tier * 6;
+    effects = { boost };
+    desc = `شانس سایه +${boost}٪`;
+    price = { gold: null, gem: 1 + Math.floor(tier / 2) };
+  } else if (cat === "title") {
+    const pow = 8 + tier * 40;
+    effects = { pow };
+    desc = `قدرت +${pow}`;
+    price = { gold: 400 * (tier + 1), gem: tier >= 6 ? 8 : null };
+  } else {
+    effects = { box: 1 };
+    desc = "جعبهٔ شانس کاتالوگ";
+    price = { gem: 3 };
+  }
+  return { id: CATALOG_BASE + i, cat, name, icon, desc, price, effects, catalog: true, tier };
+}
+export function itemById(id) {
+  const n = Number(id);
+  if (!n) return undefined;
+  const hit = SHOP_ITEMS.find((x) => x.id === n);
+  if (hit) return hit;
+  if (n >= CATALOG_BASE && n < CATALOG_BASE + CATALOG_COUNT) return catalogIndex(n - CATALOG_BASE);
+  return undefined;
+}
+export function shopListForCat(cat, extra = 24) {
+  const base = SHOP_ITEMS.filter((it) => it.cat === cat);
+  if (!extra) return base;
+  const more = [];
+  const slot = CAT_KEYS.indexOf(cat);
+  if (slot < 0) return base;
+  for (let i = slot; i < CATALOG_COUNT && more.length < extra; i += CAT_KEYS.length) more.push(catalogIndex(i));
+  return base.concat(more);
+}
 
 /* ---------- ماموریت‌ها (۱۰۰۰+ ترکیب) ---------- */
 export const MISSION_SLOTS = 5;

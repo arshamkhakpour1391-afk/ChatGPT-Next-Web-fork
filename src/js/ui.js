@@ -19,6 +19,7 @@ import {
   dungeonIndex, bossIndex, skillIndex, DUNGEON_COUNT, BOSS_COUNT, SKILL_COUNT,
   SHOP_ITEMS, SHOP_CATS, itemById, itemByName, yearQuestDay, YEAR_DAYS,
   hunterClass, rankOfLevel, missionOf, MISSION_INTERVAL_MS, RANKS, ARCHETYPES,
+  shopListForCat, CATALOG_COUNT,
 } from "./data.js";import {
   openBattle, hideFight, isFighting, openShooterDuel, shooterRemoteState,
   shooterRemoteBullet, shooterRemotePowerup, shooterRemoteEnd, hideShooter,
@@ -902,7 +903,7 @@ export function renderShop() {
   // تخفیف روزانه
   const deals = dailyDeals(st);
   const midnight = new Date(); midnight.setHours(24, 0, 0, 0);
-  $("shop-refresh").innerHTML = `تخفیف روزانه: تا <b>${dur(midnight.getTime() - nowMs())}</b> دیگر`;
+  $("shop-refresh").innerHTML = `۱۰٬۰۰۰ وسیله · تخفیف تا <b>${dur(midnight.getTime() - nowMs())}</b>`;
   $("deal-strip").innerHTML = "";
   deals.forEach((d) => {
     const card = make(`<div class="deal-card">
@@ -919,7 +920,7 @@ export function renderShop() {
   paintSort("shop-sort", [["default","پیش‌فرض"],["cheap","ارزان"],["rich","گران"],["own","مال خودم"]], shopSort, (k) => { shopSort = k; renderShop(); });
   const grid = $("shop-grid");
   grid.innerHTML = "";
-  let list = SHOP_ITEMS.filter((it) => it.cat === shopCat);
+  let list = shopListForCat(shopCat, 36);
   if (shopSort === "cheap") list = list.slice().sort((a, b) => (a.price.gold || a.price.gem * 200 || 0) - (b.price.gold || b.price.gem * 200 || 0));
   if (shopSort === "rich") list = list.slice().sort((a, b) => (b.price.gold || b.price.gem * 200 || 0) - (a.price.gold || a.price.gem * 200 || 0));
   if (shopSort === "own") list = list.slice().sort((a, b) => (st.items[b.id] || 0) - (st.items[a.id] || 0));
@@ -1743,7 +1744,7 @@ $("btn-settings").addEventListener("click", () => {
     title: "تنظیمات",
     body: `
       <div class="m-meta" style="justify-content:space-between"><span>وضعیت ابر: <b>${cloudState}</b></span><span>دیتابیس: <b>${cloud.schemaReady() ? "✅ نصب شده" : "❌ نصب نشده"}</b></span></div>
-      <div class="m-meta" style="justify-content:space-between"><span>حساب: <b>${esc(st.username)}</b></span><span>Solo System ۲.۷</span></div>
+      <div class="m-meta" style="justify-content:space-between"><span>حساب: <b>${esc(st.username)}</b></span><span>Solo System ۳.۰</span></div>
       <div class="m-meta"><span>همگام ابر: <b>${app.isCloud && app.isCloud() ? "فعال — مهارت و آمار کامل" : "محلی (وقتی اینترنت باشد می‌رود روی ابر)"}</b></span></div>
       <p style="margin-top:10px">ساختهٔ ارشام — داده‌ها روی ابر و دستگاه می‌مانند.</p>
       <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px">

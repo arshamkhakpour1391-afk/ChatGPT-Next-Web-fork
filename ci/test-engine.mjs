@@ -13,7 +13,7 @@ import {
 import {
   dungeonIndex, bossIndex, skillIndex, DUNGEON_COUNT, BOSS_COUNT, SKILL_COUNT,
   SHOP_ITEMS, SHOP_CATS, itemById, itemByName, yearQuestDay, YEAR_DAYS, missionOf,
-  ARCHETYPES, elementMult
+  ARCHETYPES, elementMult, CATALOG_COUNT, catalogIndex, shopListForCat
 } from "../src/js/data.js";
 
 let passed = 0, failed = 0;
@@ -141,10 +141,10 @@ t("سایه: استخراج و تخصیص حداکثر ۳", () => {
   }
   assert.equal(st.equip.shadows.length, 3, "حداکثر ۳ سایه");
 });
-t("محتوای تولیدی: ۱۰هزار دانجن، ۱۰۰۰ باس، ۱۰۰۰ مهارت، ۱۰۰+ آیتم", () => {
+t("محتوای تولیدی: ۱۰هزار دانجن، ۱۰۰۰ باس، ۱۰هزار تکنیک، ۱۰۰+ آیتم", () => {
   assert.equal(DUNGEON_COUNT, 10000);
   assert.equal(BOSS_COUNT, 1000);
-  assert.equal(SKILL_COUNT, 1000);
+  assert.equal(SKILL_COUNT, 10000);
   assert.ok(SHOP_ITEMS.length >= 100, "آیتم‌ها: " + SHOP_ITEMS.length);
   assert.equal(dungeonIndex(9999).level, 1000, "دانجن آخر = سطح ۱۰۰۰");
   assert.ok(dungeonIndex(9999).name.includes("پادشاه سایه"));
@@ -361,6 +361,19 @@ t("بستهٔ ابر مهارت و آمار را کامل نگه می‌دارد
   assert.equal(p.spent.atk, 2);
   assert.ok(Object.keys(p.shadows).length === 1);
   assert.ok(p.stats && p.items);
+});
+t("کاتالوگ ۱۰هزار وسیله قطعی است", () => {
+  assert.equal(CATALOG_COUNT, 10000);
+  const a = catalogIndex(7);
+  assert.equal(catalogIndex(7).id, a.id);
+  assert.ok(itemById(a.id) && itemById(a.id).name === a.name);
+  const weps = shopListForCat("weapon", 12);
+  assert.ok(weps.length > 25);
+  assert.equal(weps[0].id, SHOP_ITEMS.find((x) => x.cat === "weapon").id);
+  const st = newState("t", "s");
+  st.gold = 1e12;
+  const r = buyItem(st, a.id);
+  assert.ok(r.ok && st.items[a.id] === 1);
 });
 
 console.log(`\n=== نتیجه: ${passed} موفق، ${failed} ناموفق ===`);
