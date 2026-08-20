@@ -478,7 +478,10 @@ export function renderMissions() {
   $("mission-timer").innerHTML = `ماموریت جدید تا <b>${dur(nextIn)}</b> دیگر — هر ۲ ساعت`;
   const box = $("mission-list");
   box.innerHTML = "";
-  if (missionTab === "active" && !$("btn-claim-all")) {
+  const oldClaim = $("btn-claim-all");
+  if (missionTab !== "active") {
+    if (oldClaim && oldClaim.parentNode) oldClaim.parentNode.remove();
+  } else if (!oldClaim) {
     const wrap = make(`<div style="padding:0 12px 8px"><button class="btn btn-gold btn-sm" id="btn-claim-all" style="width:100%">دریافت همهٔ جوایز آماده‌</button></div>`);
     box.parentNode.insertBefore(wrap, box);
     wrap.querySelector("#btn-claim-all").addEventListener("click", () => {
@@ -706,6 +709,7 @@ function enterDungeon(i, d) {
 
 /* ================= باس‌ها ================= */
 let bossFilter = "all";
+let bossArch = "all";
 let bossShown = 30;
 let bossSort = "level";
 export function renderBosses() {
@@ -721,6 +725,20 @@ export function renderBosses() {
       $("battle-filters").appendChild(b);
     });
   }
+  if ($("battle-arch") && !$("battle-arch").children.length) {
+    const allB = make(`<button class="g-filter active" data-ba="all">همهٔ تیپ‌ها</button>`);
+    allB.addEventListener("click", () => { bossArch = "all"; bossShown = 30; [...$("battle-arch").children].forEach((x) => x.classList.toggle("active", x === allB)); renderBosses(); });
+    $("battle-arch").appendChild(allB);
+    ARCHETYPES.forEach((a) => {
+      const b = make(`<button class="g-filter" data-ba="${a.key}">${a.name}</button>`);
+      b.addEventListener("click", () => {
+        bossArch = a.key; bossShown = 30;
+        [...$("battle-arch").children].forEach((x) => x.classList.toggle("active", x === b));
+        renderBosses();
+      });
+      $("battle-arch").appendChild(b);
+    });
+  }
   const st = app.getSt();
   const q = (($("boss-search") && $("boss-search").value) || "").trim();
   if ($("boss-search") && !$("boss-search")._bound) {
@@ -731,16 +749,29 @@ export function renderBosses() {
   const box = $("boss-list");
   box.innerHTML = "";
   let shown = 0;
+  const match = (b) => {
+    if (bossFilter !== "all" && b.rank.key !== bossFilter) return false;
+    if (bossArch !== "all" && b.archetype && b.archetype.key !== bossArch) return false;
+    if (q && !(`${b.name} ${b.archetype?.name || ""} ${b.element || ""}`).includes(q)) return false;
+    return true;
+  };
   const order = [];
-  for (let i = 0; i < BOSS_COUNT; i++) {
-    const b = bossIndex(i);
-    if (bossFilter !== "all" && b.rank.key !== bossFilter) continue;
-    if (q && !b.name.includes(q)) continue;
-    order.push(b);
+  const need = bossShown + 1;
+  if (bossSort === "gold" || bossSort === "kill") {
+    const start = Math.max(0, st.level - 8);
+    const end = Math.min(BOSS_COUNT, start + 400);
+    for (let i = start; i < end; i++) {
+      const b = bossIndex(i);
+      if (match(b)) order.push(b);
+    }
+    if (bossSort === "gold") order.sort((a, b) => b.gold - a.gold);
+    else order.sort((a, b) => ((st.bosses && st.bosses[b.i]) ? 1 : 0) - ((st.bosses && st.bosses[a.i]) ? 1 : 0));
+  } else {
+    for (let i = 0; i < BOSS_COUNT && order.length < need; i++) {
+      const b = bossIndex(i);
+      if (match(b)) order.push(b);
+    }
   }
-  if (bossSort === "gold") order.sort((a, b) => b.gold - a.gold);
-  else if (bossSort === "kill") order.sort((a, b) => ((st.bosses && st.bosses[b.i]) ? 1 : 0) - ((st.bosses && st.bosses[a.i]) ? 1 : 0));
-  else order.sort((a, b) => a.level - b.level);
   for (const b of order) {
     if (shown >= bossShown) break;
     const i = b.i;
@@ -1182,6 +1213,7 @@ let onlinePoll = null;
 function refreshOnlineList() {
   clearInterval(onlinePoll);
   const load = async () => {
+    if (currentPage !== "duel") { clearInterval(onlinePoll); onlinePoll = null; return; }
     const r = await cloud.onlinePlayers();
     const st = app.getSt();
     const box = $("online-list");
@@ -1711,7 +1743,7 @@ $("btn-settings").addEventListener("click", () => {
     title: "تنظیمات",
     body: `
       <div class="m-meta" style="justify-content:space-between"><span>وضعیت ابر: <b>${cloudState}</b></span><span>دیتابیس: <b>${cloud.schemaReady() ? "✅ نصب شده" : "❌ نصب نشده"}</b></span></div>
-      <div class="m-meta" style="justify-content:space-between"><span>حساب: <b>${esc(st.username)}</b></span><span>Solo System ۲.۶</span></div>
+      <div class="m-meta" style="justify-content:space-between"><span>حساب: <b>${esc(st.username)}</b></span><span>Solo System ۲.۷</span></div>
       <div class="m-meta"><span>همگام ابر: <b>${app.isCloud && app.isCloud() ? "فعال — مهارت و آمار کامل" : "محلی (وقتی اینترنت باشد می‌رود روی ابر)"}</b></span></div>
       <p style="margin-top:10px">ساختهٔ ارشام — داده‌ها روی ابر و دستگاه می‌مانند.</p>
       <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px">
@@ -1912,6 +1944,7 @@ export function showAuth(errMsg) {
     ? `حساب ذخیره‌شده: <b>${esc(acc.username)}</b> — فقط رمز را بزن و وارد شو.`
     : "نام کاربری برای همیشه می‌ماند — خوب انتخاب کن.";
   if (acc && acc.username && !$("auth-user").value) $("auth-user").value = acc.username;
+  if (acc && acc.pass && $("auth-pass") && !$("auth-pass").value) $("auth-pass").value = acc.pass;
   if (acc && acc.username) {
     authTab = "login";
     document.querySelectorAll(".auth-tab").forEach((x) => x.classList.toggle("active", x.dataset.authtab === "login"));

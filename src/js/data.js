@@ -54,6 +54,10 @@ export const ARCHETYPES = [
   { key: "titan", name: "غول", atk: 0.86, def: 1.12, hp: 1.62, tag: "جان عظیم" },
   { key: "lich", name: "لیچ", atk: 1.18, def: 0.8, hp: 0.94, tag: "سرقت جان" },
   { key: "raider", name: "غارتگر", atk: 1.16, def: 0.84, hp: 0.96, tag: "طلا می‌دزدد" },
+  { key: "paladin", name: "پالادین", atk: 0.92, def: 1.18, hp: 1.22, tag: "شفا در نبرد" },
+  { key: "frost", name: "یخ‌بندان", atk: 1.04, def: 1.08, hp: 1.06, tag: "حمله را کند می‌کند" },
+  { key: "storm", name: "طوفان", atk: 1.2, def: 0.78, hp: 0.92, tag: "ضربهٔ زنجیره‌ای" },
+  { key: "devourer", name: "بلعنده", atk: 1.14, def: 0.88, hp: 1.08, tag: "سپر را می‌خورد" },
 ];
 export function archetypeOf(i) { return ARCHETYPES[((i % ARCHETYPES.length) + ARCHETYPES.length) % ARCHETYPES.length]; }
 export const ELEMENT_BEATS = { "آتش": "یخ", "یخ": "رعد", "رعد": "سایه", "سایه": "نور", "نور": "سم", "سم": "آتش" };
@@ -148,6 +152,10 @@ function makeBossSkills(rng, level) {
     { name: "چنگال سایه", mult: 1.8, cd: 7000, color: "#9b30ff" },
     { name: "باران نیزه", mult: 2.2, cd: 12000, color: "#2ad4ff" },
     { name: "گاز سمی", mult: 1.4, cd: 9000, color: "#2eff7e", dot: true },
+    { name: "طوفان استخوان", mult: 2.4, cd: 13000, color: "#c8ccd8" },
+    { name: "بلع نور", mult: 1.9, cd: 11000, color: "#ffd76b", drain: true },
+    { name: "یخ‌زدگی مطلق", mult: 1.35, cd: 10000, color: "#2ad4ff", freeze: true },
+    { name: "غارت روح", mult: 1.5, cd: 8500, color: "#ffc93c", steal: true },
   ];
   const n = Math.min(3, 2 + Math.floor(level / 300));
   const out = [];

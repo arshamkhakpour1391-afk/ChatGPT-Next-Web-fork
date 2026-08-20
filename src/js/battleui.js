@@ -116,6 +116,10 @@ function spawnWave() {
     if (arch.key === "titan") skills = (skills || []).concat([{ name: "لرزش زمین", mult: 1.85, cd: 12000, color: "#ffc93c" }]);
     if (arch.key === "lich") skills = (skills || []).concat([{ name: "زه روح", mult: 1.4, cd: 7000, color: "#9b30ff", drain: true }]);
     if (arch.key === "raider") skills = (skills || []).concat([{ name: "غارت", mult: 1.3, cd: 8000, color: "#ffc93c", steal: true }]);
+    if (arch.key === "paladin") skills = (skills || []).concat([{ name: "نور شفا", mult: 1.2, cd: 9000, color: "#ffd76b", drain: true }]);
+    if (arch.key === "frost") skills = (skills || []).concat([{ name: "نفس یخ", mult: 1.35, cd: 8000, color: "#2ad4ff", freeze: true }]);
+    if (arch.key === "storm") skills = (skills || []).concat([{ name: "رعد زنجیر", mult: 1.55, cd: 7000, color: "#4f7cff" }]);
+    if (arch.key === "devourer") skills = (skills || []).concat([{ name: "بلع سپر", mult: 1.45, cd: 7500, color: "#ff8a2a" }]);
   }
   b.enemy = {
     hp, maxHp: hp, atk, def, name, emoji, skills, rage: false, phase: 1,
@@ -247,6 +251,12 @@ function enemyAttack() {
       mult = ready.mult; label = ready.name; ready._cdAt = nowMs() + ready.cd;
       if (ready.debuff) { b.player.rageMult = 1; b.player.shield = 0; addLog(`${e.name}: ${ready.name}! دفاعت شکست`, "l-bad"); }
       if (ready.dot) b.enemyDebuffs.poison = { until: nowMs() + 6000, dps: Math.max(2, Math.floor(e.atk * 0.12)), acc: 0 };
+      if (ready.drain) { e.hp = Math.min(e.maxHp, e.hp + Math.floor(e.maxHp * 0.06)); addLog(`${e.name} جان گرفت`, "l-bad"); }
+      if (ready.freeze) { b.player.lastAtk = nowMs() + 900; addLog("یخ زدنت — حمله کند شد", "l-bad"); }
+      if (ready.steal) {
+        const steal = Math.min(b.st.gold || 0, 3 + Math.floor(b.st.level * 0.4));
+        if (steal > 0) { b.st.gold -= steal; addLog(`${e.name} ${faNum(steal)} طلا دزدید`, "l-bad"); }
+      }
     }
   }
   // کور شدن
@@ -308,6 +318,22 @@ function enemyAttack() {
         b.st.gold -= steal;
         addLog(`غارتگر ${faNum(steal)} طلا دزدید`, "l-bad");
       }
+    }
+    if (arch && arch.key === "paladin") {
+      e.hp = Math.min(e.maxHp, e.hp + Math.floor(dmg * 0.18));
+    }
+    if (arch && arch.key === "frost") {
+      b.player.lastAtk = Math.max(b.player.lastAtk || 0, nowMs() + 280);
+    }
+    if (arch && arch.key === "devourer" && b.player.shield > 0) {
+      b.player.shield = Math.floor(b.player.shield * 0.4);
+      addLog("بلعنده سپرت را خورد", "l-bad");
+    }
+    if (arch && arch.key === "storm" && Math.random() < 0.28) {
+      const extra = Math.max(1, Math.floor(dmg * 0.45));
+      b.player.hp -= extra;
+      b.dmgTaken += extra;
+      addLog(`رعد دوم: ${faNum(extra)} آسیب`, "l-bad");
     }
   }
   if (b.player.hp <= 0) { b.player.hp = 0; finish(false); return; }
@@ -518,7 +544,7 @@ export function useUltimate() {
 function elementalStrike() {
   const b = battle;
   if (!b || b.over) return { error: "نبرد تمام شده" };
-  if ((b.st.level || 1) < 3) return { error: "سطح ۳ لازم است" };
+  if ((b.st.level || 1) < 1) return { error: "سطح ۱ لازم است" };
   const now = nowMs();
   if (b.cds.elem && b.cds.elem > now) return { error: "در حال شارژ" };
   b.cds.elem = now + 8000;
@@ -681,7 +707,7 @@ function renderActions() {
   });
   box.appendChild(ult);
 
-  if ((b.st.level || 1) >= 3) {
+  if ((b.st.level || 1) >= 1) {
     const elm = make(`<button class="fa-btn" data-act="elem"><span class="fa-ico">✨</span>ضربهٔ عنصر</button>`);
     elm.addEventListener("click", () => {
       const r = elementalStrike();
