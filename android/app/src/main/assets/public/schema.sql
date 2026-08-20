@@ -75,6 +75,9 @@ create table if not exists public.duels (
   created_at timestamptz not null default now()
 );
 create index if not exists duels_status_idx on public.duels(status);
+create index if not exists players_last_seen_idx on public.players(last_seen desc);
+create index if not exists players_power_idx on public.players(power desc);
+create index if not exists players_level_idx on public.players(level desc);
 
 -- ============================================================
 --  ممنوعیت تغییر نام کاربری (نام برای همیشه ثابت است)
@@ -530,6 +533,8 @@ grant execute on function public.list_rooms() to anon, authenticated;
 grant execute on function public.create_room(text) to anon, authenticated;
 grant execute on function public.join_room(uuid) to anon, authenticated;
 grant execute on function public.current_user_id() to anon, authenticated;
+grant execute on function public.save_full_state(jsonb) to anon, authenticated;
+grant execute on function public.load_full_state() to anon, authenticated;
 grant select on public.accounts to anon, authenticated;
 grant select on public.sessions to anon, authenticated;
 grant select, insert, update on public.players to anon, authenticated;
