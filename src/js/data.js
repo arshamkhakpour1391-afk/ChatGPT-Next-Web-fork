@@ -13,17 +13,28 @@ export const RANKS = [
   { key: "N",  name: "سطح ملی",  cls: "rank-N",  color: "#2ad4ff", mult: 250 },
   { key: "M",  name: "سایهٔ پادشاه", cls: "rank-M", color: "#c07cff", mult: 550 },
 ];
+export const LEVEL_CAP = 10000;
 export function rankOfLevel(level) {
-  if (level >= 1000) return { key: "M+", name: "پادشاه سایه‌ها", cls: "rank-M", color: "#c07cff", mult: 3000 };
-  if (level >= 651) return RANKS[8];
-  if (level >= 401) return RANKS[7];
-  if (level >= 251) return RANKS[6];
-  if (level >= 151) return RANKS[5];
-  if (level >= 101) return RANKS[4];
-  if (level >= 61)  return RANKS[3];
-  if (level >= 31)  return RANKS[2];
-  if (level >= 11)  return RANKS[1];
+  const lv = Math.max(1, level || 1);
+  if (lv >= 8000) return { key: "X",  name: "تاج ابدیت",     cls: "rank-M", color: "#ffe9a8", mult: 12000 };
+  if (lv >= 5000) return { key: "Z",  name: "ارباب جهان",    cls: "rank-M", color: "#ffd76b", mult: 8000 };
+  if (lv >= 2500) return { key: "Ω",  name: "شکارچی اسطوره", cls: "rank-M", color: "#ff9dd5", mult: 5000 };
+  if (lv >= 1000) return { key: "M+", name: "پادشاه سایه‌ها", cls: "rank-M", color: "#c07cff", mult: 3000 };
+  if (lv >= 651) return RANKS[8];
+  if (lv >= 401) return RANKS[7];
+  if (lv >= 251) return RANKS[6];
+  if (lv >= 151) return RANKS[5];
+  if (lv >= 101) return RANKS[4];
+  if (lv >= 61)  return RANKS[3];
+  if (lv >= 31)  return RANKS[2];
+  if (lv >= 11)  return RANKS[1];
   return RANKS[0];
+}
+export function levelTag(level) {
+  const lv = Math.max(1, Math.min(LEVEL_CAP, level | 0));
+  const a = ADJ[(lv - 1) % ADJ.length];
+  const b = NOUN[Math.floor((lv - 1) / ADJ.length) % NOUN.length];
+  return `#${lv} ${a} ${b}`;
 }
 export function rankByIndex(i) { return RANKS[Math.max(0, Math.min(RANKS.length - 1, i))]; }
 export function rankOfIndex(i) {
@@ -442,7 +453,9 @@ export function verifyItem(it) {
   if (!it || !it.id || !it.name || !it.cat) return false;
   if (!it.price || (it.price.gold == null && it.price.gem == null)) return false;
   if (!it.effects || typeof it.effects !== "object") return false;
-  return String(it.name).length > 1;
+  if (String(it.name).length <= 1) return false;
+  if (it.catalog && (!it.story || !it.tex || !it.rarity)) return false;
+  return Object.keys(it.effects).length > 0;
 }
 export function shopListForCat(cat, extra = 24) {
   const base = SHOP_ITEMS.filter((it) => it.cat === cat);
@@ -552,10 +565,16 @@ export const TITLES = [
   { name: "پادشاه سایه‌ها", need: (st) => st.level >= 250 },
   { name: "افسانهٔ زنده", need: (st) => st.level >= 500 },
   { name: "جاودان", need: (st) => st.level >= 1000 },
+  { name: "اسطوره", need: (st) => st.level >= 2500 },
+  { name: "ارباب جهان", need: (st) => st.level >= 5000 },
+  { name: "تاج ابدیت", need: (st) => st.level >= 8000 },
 ];
 
 /* ---------- کلاس شکارچی ---------- */
 export function hunterClass(level) {
+  if (level >= 8000) return { name: "تاج ابدیت", cls: "rank-M" };
+  if (level >= 5000) return { name: "ارباب جهان", cls: "rank-M" };
+  if (level >= 2500) return { name: "شکارچی اسطوره", cls: "rank-M" };
   if (level >= 1000) return { name: "پادشاه سایه‌ها", cls: "rank-M" };
   if (level >= 650) return { name: "سایهٔ پادشاه", cls: "rank-M" };
   if (level >= 400) return { name: "شکارچی سطح ملی", cls: "rank-N" };

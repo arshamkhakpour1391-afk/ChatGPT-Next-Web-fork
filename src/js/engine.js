@@ -3,7 +3,7 @@ import {
   mulberry32, seedOf, pick, range, hashStr, todayKey, weekKey, deepClone, clamp, nowMs, fmt, keyToMs
 } from "./util.js";
 import {
-  rankOfLevel, hunterClass, dungeonIndex, bossIndex, skillIndex,
+  rankOfLevel, hunterClass, dungeonIndex, bossIndex, skillIndex, LEVEL_CAP,
   SHOP_ITEMS, itemById, itemByName, missionOf, MISSION_SLOTS, MISSION_INTERVAL_MS,
   yearQuestDay, dailyPicks, randomTitle, randomWeapon, YEAR_DAYS, TITLES
 } from "./data.js";
@@ -214,7 +214,7 @@ export function addXP(st, n) {
   st.dayLog.xp += n;
   const evt = { levelUps: 0, leveled: false };
   let guard = 0;
-  while (st.xp >= xpNeed(st.level) && guard++ < 300) {
+  while (st.level < LEVEL_CAP && st.xp >= xpNeed(st.level) && guard++ < 20000) {
     st.xp -= xpNeed(st.level);
     st.level++;
     evt.levelUps++;

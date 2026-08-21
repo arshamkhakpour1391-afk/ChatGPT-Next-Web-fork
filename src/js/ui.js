@@ -19,7 +19,7 @@ import {
   dungeonIndex, bossIndex, skillIndex, DUNGEON_COUNT, BOSS_COUNT, SKILL_COUNT,
   SHOP_ITEMS, SHOP_CATS, itemById, itemByName, yearQuestDay, YEAR_DAYS,
   hunterClass, rankOfLevel, missionOf, MISSION_INTERVAL_MS, RANKS, ARCHETYPES,
-  shopListForCat, CATALOG_COUNT,
+  shopListForCat, CATALOG_COUNT, levelTag, LEVEL_CAP,
 } from "./data.js";
 import { texUrl, PRESET_AVATARS, readAvatarFile, avatarMarkup } from "./gfx.js";
 import {
@@ -34,6 +34,10 @@ let app = null; // ست می‌شود توسط main
 export function initUI(a) { app = a; }
 
 const $ = (id) => el(id);
+function nameTagHtml(level) {
+  const r = rankOfLevel(level || 1);
+  return `<span class="name-tag ${r.cls}"><b>${esc(r.key)}</b> ${esc(levelTag(level || 1))}</span>`;
+}
 
 /* ---------- توست ---------- */
 export function toast(msg, type = "info", ms = 2600) {
@@ -171,8 +175,9 @@ export function renderTopbar() {
   const al = $("avatar-letter");
   if (al && !st.avatar) al.textContent = letter;
   $("hunter-name").textContent = st.username || "—";
-  $("hunter-rank").textContent = hc.name;
-  $("hunter-rank").style.color = rankOfLevel(st.level).color;
+  const rk = rankOfLevel(st.level);
+  $("hunter-rank").textContent = `${rk.key} · ${levelTag(st.level)}`;
+  $("hunter-rank").style.color = rk.color;
   $("res-gold").textContent = fmtNum(st.gold);
   $("res-gems").textContent = faNum(st.gems);
   $("res-energy").textContent = `${faNum(st.energy)}/${faNum(energyCap(st))}`;
@@ -183,7 +188,7 @@ export function renderTopbar() {
   $("power-num").textContent = fmtNum(computePower(st));
   $("home-level").textContent = faNum(st.level);
   $("home-class").textContent = hc.name;
-  const titles = ["مبتدی", "شکارچی تازه‌کار", "گرگ تنها", "نابودگر باس‌ها", "پاک‌کنندهٔ دروازه‌ها", "استاد رقابت", "پادشاه سایه‌ها", "افسانهٔ زنده", "جاودان"];
+  const titles = ["مبتدی", "شکارچی تازه‌کار", "گرگ تنها", "نابودگر باس‌ها", "پاک‌کنندهٔ دروازه‌ها", "استاد رقابت", "پادشاه سایه‌ها", "افسانهٔ زنده", "جاودان", "اسطوره", "ارباب جهان", "تاج ابدیت"];
   const earned = titles.filter((t) => st.titles && st.titles[t]);
   $("home-title").textContent = earned[earned.length - 1] || "مبتدی";
   updateNotifDot();
@@ -1259,7 +1264,7 @@ function refreshOnlineList() {
       const row = make(`<div class="player-row">
         <div class="avatar" style="width:32px;height:32px;font-size:13px">${esc((p.username || "؟").charAt(0).toUpperCase())}</div>
         <div class="skill-info">
-          <div class="p-name">${esc(p.username)} <span class="chip chip-blue">${esc(p.hunter_class || "")}</span></div>
+          <div class="p-name">${esc(p.username)} ${nameTagHtml(p.level)} <span class="chip chip-blue">${esc(p.hunter_class || "")}</span></div>
           <div class="p-sub">سطح ${faNum(p.level)} · قدرت ${fmtNum(p.power)}</div>
         </div>
         <button class="btn btn-red btn-sm" data-ch="${esc(p.username)}" data-chid="${p.user_id}">چالش!</button>
@@ -1681,7 +1686,7 @@ function appendChatMsg(m) {
   if (!box) return;
   const mine = m.userId === app.myUserId() || m.user_id === app.myUserId();
   const msg = make(`<div class="msg ${m.kind === "system" ? "system" : mine ? "mine" : "other"}">
-    ${m.kind !== "system" ? `<span class="m-user">${mine ? "تو" : esc(m.username || "؟")}</span>` : ""}
+    ${m.kind !== "system" ? `<span class="m-user">${mine ? "تو" : esc(m.username || "؟")} ${nameTagHtml((mine && app.getSt() ? app.getSt().level : m.level) || 1)}</span>` : ""}
     ${m.kind === "voice" ? `<audio controls src="${esc(m.body)}"></audio>` : esc(m.body || "")}
     <span class="m-time">${timeAgo(m.created_at || m.ts)}</span>
   </div>`);
@@ -1920,7 +1925,7 @@ $("btn-settings").addEventListener("click", () => {
     title: "تنظیمات",
     body: `
       <div class="m-meta" style="justify-content:space-between"><span>وضعیت ابر: <b>${cloudState}</b></span><span>دیتابیس: <b>${cloud.schemaReady() ? "✅ نصب شده" : "❌ نصب نشده"}</b></span></div>
-      <div class="m-meta" style="justify-content:space-between"><span>حساب: <b>${esc(st.username)}</b></span><span>Solo System ۳.۲</span></div>
+      <div class="m-meta" style="justify-content:space-between"><span>حساب: <b>${esc(st.username)}</b></span><span>Solo System ۳.۳</span></div>
       <div class="m-meta"><span>همگام ابر: <b>${app.isCloud && app.isCloud() ? "فعال — مهارت و آمار کامل" : "محلی (وقتی اینترنت باشد می‌رود روی ابر)"}</b></span></div>
       <p style="margin-top:10px">ساختهٔ ارشام — داده‌ها روی ابر و دستگاه می‌مانند.</p>
       <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px">

@@ -528,3 +528,6 @@ body{
 .item-story{font-size:10px;color:var(--txt2);line-height:1.7;margin-top:4px}
 .rarity{font-size:9px;font-weight:800;letter-spacing:.3px}
 .rarity.r0{color:#c8ccd8}.rarity.r1{color:#6fffa8}.rarity.r2{color:#9db8ff}.rarity.r3{color:#c2aeff}.rarity.r4{color:#ffd76b}
+.name-tag{display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:800;padding:2px 7px;border-radius:10px;border:1px solid var(--card-border);background:rgba(255,255,255,.05);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
+.name-tag b{font-size:10px}
+.hunter-rank{max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

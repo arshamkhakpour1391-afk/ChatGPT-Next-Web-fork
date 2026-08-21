@@ -13,7 +13,8 @@ import {
 import {
   dungeonIndex, bossIndex, skillIndex, DUNGEON_COUNT, BOSS_COUNT, SKILL_COUNT,
   SHOP_ITEMS, SHOP_CATS, itemById, itemByName, yearQuestDay, YEAR_DAYS, missionOf,
-  ARCHETYPES, elementMult, CATALOG_COUNT, catalogIndex, shopListForCat, verifyItem
+  ARCHETYPES, elementMult, CATALOG_COUNT, catalogIndex, shopListForCat, verifyItem,
+  LEVEL_CAP, levelTag, hunterClass, rankOfLevel
 } from "../src/js/data.js";
 
 let passed = 0, failed = 0;
@@ -397,6 +398,34 @@ t("تکسچر ۴K و داستان برای آیتم و باس و دروازه", 
     const it = catalogIndex(i);
     assert.ok(verifyItem(it) && it.story && it.tex);
   });
+});
+t("سقف ۱۰هزار سطح و تگ نام یکتا", () => {
+  assert.equal(LEVEL_CAP, 10000);
+  assert.equal(levelTag(1), levelTag(1));
+  assert.notEqual(levelTag(1), levelTag(2));
+  const seen = new Set();
+  for (let i = 1; i <= LEVEL_CAP; i += 1) seen.add(levelTag(i));
+  assert.equal(seen.size, LEVEL_CAP, "تگ تکراری");
+  assert.equal(hunterClass(1).name, "شکارچی E");
+  assert.equal(hunterClass(1000).name, "پادشاه سایه‌ها");
+  assert.equal(hunterClass(5000).name, "ارباب جهان");
+  assert.equal(rankOfLevel(8000).key, "X");
+  const st = newState("t", "s");
+  st.xp = xpNeed(st.level) * 3;
+  addXP(st, 0);
+  assert.ok(st.level >= 1 && st.level <= LEVEL_CAP);
+});
+t("اسکن عمیق کاتالوگ ۱۰۰هزار: داستان تکسچر اثر", () => {
+  let n = 0;
+  for (let i = 0; i < CATALOG_COUNT; i += 97) {
+    const it = catalogIndex(i);
+    assert.ok(verifyItem(it), "bad " + i);
+    assert.ok(it.story && it.story.length > 20, "story " + i);
+    assert.ok(it.tex && it.tex.indexOf("svg") > 0, "tex " + i);
+    assert.ok(Object.keys(it.effects).length > 0, "fx " + i);
+    n++;
+  }
+  assert.ok(n > 1000);
 });
 
 console.log(`\n=== نتیجه: ${passed} موفق، ${failed} ناموفق ===`);
