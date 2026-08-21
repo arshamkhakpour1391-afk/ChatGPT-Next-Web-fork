@@ -1,0 +1,2 @@
+// generated stub
+ext { cdvMinSdkVersion = rootProject.ext.minSdkVersion }

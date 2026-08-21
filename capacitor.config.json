@@ -1,0 +1,17 @@
+{
+  "appId": "com.arsham.solosystem",
+  "appName": "solo system",
+  "webDir": "www",
+  "backgroundColor": "#05060a",
+  "android": {
+    "allowMixedContent": true,
+    "backgroundColor": "#05060a",
+    "scheme": "solosystem"
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_solo",
+      "iconColor": "#7c5cff"
+    }
+  }
+}

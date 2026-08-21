@@ -1,0 +1,6 @@
+// Capacitor modules vendored under android/libs so `./gradlew` needs no node_modules
+include ':capacitor-android'
+project(':capacitor-android').projectDir = new File('libs/capacitor-android')
+
+include ':capacitor-local-notifications'
+project(':capacitor-local-notifications').projectDir = new File('libs/capacitor-local-notifications')
