@@ -16,9 +16,15 @@ export function packCloudState(st) {
   delete copy.pendingPunish;
   delete copy.pendingLogin;
   delete copy.pendingTitles;
-  if (Array.isArray(copy.events) && copy.events.length > 80) copy.events = copy.events.slice(0, 80);
-  if (Array.isArray(copy.duelLog) && copy.duelLog.length > 40) copy.duelLog = copy.duelLog.slice(0, 40);
-  if (copy.punish && Array.isArray(copy.punish.history) && copy.punish.history.length > 50) copy.punish.history = copy.punish.history.slice(0, 50);
+  if (Array.isArray(copy.events) && copy.events.length > 200) copy.events = copy.events.slice(0, 200);
+  if (Array.isArray(copy.duelLog) && copy.duelLog.length > 80) copy.duelLog = copy.duelLog.slice(0, 80);
+  if (copy.punish && Array.isArray(copy.punish.history) && copy.punish.history.length > 80) copy.punish.history = copy.punish.history.slice(0, 80);
+  if (!copy.skillsOwned) copy.skillsOwned = {};
+  if (!copy.equip) copy.equip = { active: [], weapon: null, armor: null, shadows: [], title: null, titleItem: null };
+  if (!copy.spent) copy.spent = { hp: 0, atk: 0, def: 0, crit: 0 };
+  if (!copy.items) copy.items = {};
+  if (!copy.shadows) copy.shadows = {};
+  if (!copy.stats) copy.stats = {};
   copy.v = STATE_VERSION;
   copy.updatedAt = nowMs();
   return copy;

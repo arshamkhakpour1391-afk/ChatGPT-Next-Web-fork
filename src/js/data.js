@@ -70,6 +70,10 @@ export const ARCHETYPES = [
   { key: "frost", name: "یخ‌بندان", atk: 1.04, def: 1.08, hp: 1.06, tag: "حمله را کند می‌کند" },
   { key: "storm", name: "طوفان", atk: 1.2, def: 0.78, hp: 0.92, tag: "ضربهٔ زنجیره‌ای" },
   { key: "devourer", name: "بلعنده", atk: 1.14, def: 0.88, hp: 1.08, tag: "سپر را می‌خورد" },
+  { key: "sentinel", name: "دیده‌بان", atk: 0.94, def: 1.22, hp: 1.1, tag: "ضربه را پیش‌بینی می‌کند" },
+  { key: "pyro", name: "آتش‌افروز", atk: 1.26, def: 0.76, hp: 0.9, tag: "سوختگی مداوم" },
+  { key: "cursed", name: "نفرین‌زده", atk: 1.08, def: 0.86, hp: 1.04, tag: "شانس را می‌خورد" },
+  { key: "duelist", name: "شمشیرزن", atk: 1.18, def: 0.92, hp: 0.94, tag: "پاری و ضدحمله" },
 ];
 export function archetypeOf(i) { return ARCHETYPES[((i % ARCHETYPES.length) + ARCHETYPES.length) % ARCHETYPES.length]; }
 export const ELEMENT_BEATS = { "آتش": "یخ", "یخ": "رعد", "رعد": "سایه", "سایه": "نور", "نور": "سم", "سم": "آتش" };
@@ -95,7 +99,8 @@ export function dungeonIndex(i) {
     : (isBossGate ? `${noun} ${adj} — دروازهٔ باس` : `${noun} ${adj}`);
   const monster = MONSTERS[Math.floor(rng() * MONSTERS.length)];
   const waves = 3 + (i % 4);
-  const enemyPower = Math.floor(40 * Math.pow(level, 1.55) * rank.mult * (0.8 + rng() * 0.4));
+  const hard = level >= 20 ? 1.12 : 1;
+  const enemyPower = Math.floor(40 * Math.pow(level, 1.55) * rank.mult * (0.8 + rng() * 0.4) * hard);
   const bossPower = Math.floor(enemyPower * (2.4 + rng()));
   const gold = Math.floor(28 * Math.pow(level, 1.8) * rank.mult * (0.85 + rng() * 0.3));
   const xp = Math.floor(46 * Math.pow(level, 1.72) * rank.mult * (0.85 + rng() * 0.3));

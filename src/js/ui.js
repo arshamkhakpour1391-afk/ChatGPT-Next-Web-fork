@@ -408,7 +408,7 @@ function renderQuick() {
     app.save(); renderHome();
   });
   mk("👥 دوستان", () => switchPage("chat"));
-  mk("🔫 FFA", () => { switchPage("duel"); setTimeout(() => $("btn-ffa")?.click(), 80); });
+  mk("🔫 نبرد آزاد", () => { switchPage("duel"); setTimeout(() => $("btn-ffa")?.click(), 80); });
   mk(`📒 کدکس ${faNum(cx.dungeons)}/${faNum(cx.bosses)}`, () => {
     modal({
       title: "کدکس شکارچی",
@@ -870,7 +870,7 @@ function maybeArise(src) {
   const baseChance = Math.floor(Math.min(0.92, src.baseChance) * 100);
   const boosted = Math.floor(Math.min(0.92, src.baseChance * (1 + bestBoost / 100)) * 100);
   modal({
-    title: "برخاستن! (Arise)", cls: "arise-modal",
+    title: "برخاستن!", cls: "arise-modal",
     body: `<div class="arise-shadow">${src.emoji}</div>
       <div class="arise-title">سایه‌ای احساس می‌شود...</div>
       <p>می‌توانی روح این دشمن شکست‌خورده را به سایهٔ خودت تبدیل کنی.<br>
@@ -1582,7 +1582,7 @@ function startFfaSession(code, id, isHost) {
 }
 $("btn-ffa")?.addEventListener("click", () => {
   modal({
-    title: "FFA تا ۱۰۰ بازیکن",
+    title: "نبرد آزاد تا ۱۰۰ بازیکن",
     body: `<p>لابی بساز و دوستان را دعوت کن، یا با کد وارد شو. مبارزه شوتر مثل کانتر است.</p>
       <label class="field"><span>کد لابی (اگر داری)</span><input id="ffa-code" maxlength="8" placeholder="ABC123"></label>`,
     actions: [
@@ -1925,7 +1925,7 @@ $("btn-settings").addEventListener("click", () => {
     title: "تنظیمات",
     body: `
       <div class="m-meta" style="justify-content:space-between"><span>وضعیت ابر: <b>${cloudState}</b></span><span>دیتابیس: <b>${cloud.schemaReady() ? "✅ نصب شده" : "❌ نصب نشده"}</b></span></div>
-      <div class="m-meta" style="justify-content:space-between"><span>حساب: <b>${esc(st.username)}</b></span><span>Solo System ۳.۳</span></div>
+      <div class="m-meta" style="justify-content:space-between"><span>حساب: <b>${esc(st.username)}</b></span><span>سیستم سولو ۳.۴</span></div>
       <div class="m-meta"><span>همگام ابر: <b>${app.isCloud && app.isCloud() ? "فعال — مهارت و آمار کامل" : "محلی (وقتی اینترنت باشد می‌رود روی ابر)"}</b></span></div>
       <p style="margin-top:10px">ساختهٔ ارشام — داده‌ها روی ابر و دستگاه می‌مانند.</p>
       <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px">
@@ -2143,10 +2143,14 @@ async function doAuth() {
     cloud.initCloud?.();
     const locals = lsGet("local_accounts") || {};
     let r = { error: "no" };
-    try {
-      r = authTab === "login" ? await cloud.login(user, pass) : await cloud.register(user, pass);
-    } catch (e) {
-      r = { error: "اتصال به سرور برقرار نشد" };
+    if (authTab === "login" && locals[user] && locals[user].pass === pass) {
+      r = localAuthFallback("login", user, pass);
+    } else {
+      try {
+        r = authTab === "login" ? await cloud.login(user, pass) : await cloud.register(user, pass);
+      } catch (e) {
+        r = { error: "اتصال به سرور برقرار نشد" };
+      }
     }
     const errStr = r && r.error ? String(r.error.message || r.error.code || r.error) : "";
     const netFail = !r || (r.error && /اتصال|TIMEOUT|سرور|Failed|fetch|network|offline|no client|PGRST205|نصب نشده|خطای سرور|Could not find|schema|JWT|invalid api|function public/i.test(errStr));

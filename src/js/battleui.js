@@ -127,6 +127,10 @@ function spawnWave() {
     if (arch.key === "frost") skills = (skills || []).concat([{ name: "نفس یخ", mult: 1.35, cd: 8000, color: "#2ad4ff", freeze: true }]);
     if (arch.key === "storm") skills = (skills || []).concat([{ name: "رعد زنجیر", mult: 1.55, cd: 7000, color: "#4f7cff" }]);
     if (arch.key === "devourer") skills = (skills || []).concat([{ name: "بلع سپر", mult: 1.45, cd: 7500, color: "#ff8a2a" }]);
+    if (arch.key === "sentinel") skills = (skills || []).concat([{ name: "نگاه تیز", mult: 1.25, cd: 6800, color: "#9db8ff" }]);
+    if (arch.key === "pyro") skills = (skills || []).concat([{ name: "باران آتش", mult: 1.7, cd: 8000, color: "#ff8a2a", dot: true }]);
+    if (arch.key === "cursed") skills = (skills || []).concat([{ name: "نفرین شانس", mult: 1.3, cd: 9000, color: "#9b30ff", debuff: true }]);
+    if (arch.key === "duelist") skills = (skills || []).concat([{ name: "ضدحمله", mult: 1.6, cd: 6200, color: "#c8ccd8" }]);
   }
   b.enemy = {
     hp, maxHp: hp, atk, def, name, emoji, skills, rage: false, phase: 1,
@@ -1247,7 +1251,7 @@ export function openFfaArena(cfg) {
     ffa: true,
     toast: cfg.toast,
   });
-  if (el("shooter-vs")) el("shooter-vs").textContent = `FFA ${cfg.code || ""} — تا ۱۰۰ نفر`;
+  if (el("shooter-vs")) el("shooter-vs").textContent = `نبرد آزاد ${cfg.code || ""} — تا ۱۰۰ نفر`;
   if (el("shooter-time")) el("shooter-time").textContent = "۱۸۰";
   if (shooter) shooter.time = 180;
 }
