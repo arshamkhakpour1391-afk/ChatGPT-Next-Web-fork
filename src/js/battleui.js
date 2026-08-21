@@ -1019,9 +1019,21 @@ function step() {
       if (s.me.hp <= 0) { s.me.hp = 0; endShooter("lose"); return; }
     }
     // برخورد با حریف (گلوله من)
-    if (!dead && b.owner === "me" && Math.hypot(b.x - s.opp.x, b.y - s.opp.y) < 18) {
+    if (!dead && b.owner === "me" && s.opp.x > -50 && Math.hypot(b.x - s.opp.x, b.y - s.opp.y) < 18) {
       s.opp.hp -= s.myDmg; dead = true;
       if (s.opp.hp <= 0) { s.opp.hp = 0; endShooter("win"); return; }
+    }
+    if (!dead && b.owner === "me" && s.bots && s.bots.length) {
+      for (let j = s.bots.length - 1; j >= 0; j--) {
+        const bot = s.bots[j];
+        if (Math.hypot(b.x - bot.x, b.y - bot.y) < 18) {
+          bot.hp -= s.myDmg;
+          dead = true;
+          if (bot.hp <= 0) s.bots.splice(j, 1);
+          break;
+        }
+      }
+      if (s.cfg.ffa && s.bots && s.bots.length === 0) { endShooter("win"); return; }
     }
     if (dead) s.bullets.splice(i, 1);
   }
@@ -1045,8 +1057,30 @@ function step() {
     endShooter(s.me.hp >= s.opp.hp ? "win" : "lose");
     return;
   }
+  // ربات‌های نبرد آزاد (تمرین / پر کردن لابی)
+  if (s.bots && s.bots.length) {
+    for (const bot of s.bots) {
+      const dx = s.me.x - bot.x, dy = s.me.y - bot.y;
+      const dist = Math.hypot(dx, dy) || 1;
+      bot.dir = Math.atan2(dy, dx);
+      const spd = 70 + (bot.hp % 40);
+      bot.x = clamp(bot.x + (dx / dist) * spd * 0.016, 16, 784);
+      bot.y = clamp(bot.y + (dy / dist) * spd * 0.016, 16, 434);
+      if (now - bot.lastFire > 780 && dist < 460) {
+        bot.lastFire = now;
+        s.bullets.push({
+          id: "bot-" + now + bot.id,
+          x: bot.x + Math.cos(bot.dir) * 20,
+          y: bot.y + Math.sin(bot.dir) * 20,
+          vx: Math.cos(bot.dir) * 360,
+          vy: Math.sin(bot.dir) * 360,
+          owner: "opp"
+        });
+      }
+    }
+  }
   // قطع ارتباط حریف
-  if (now - s.opp.lastInput > 9000 && !s.cfg.localTest) {
+  if (now - s.opp.lastInput > 9000 && !s.cfg.localTest && !s.cfg.ffa) {
     endShooter("win-forfeit");
     return;
   }
@@ -1090,7 +1124,13 @@ function draw() {
     g.shadowBlur = 0;
   });
   drawFighter(g, s.me, "#4f7cff", "تو");
-  drawFighter(g, s.opp, "#ff2d55", s.cfg.opp.name);
+  if (s.opp.x > -50) drawFighter(g, s.opp, "#ff2d55", s.cfg.opp.name);
+  if (s.bots) {
+    s.bots.forEach((bot, i) => {
+      const cols = ["#ff2d55", "#ff8a2a", "#9b30ff", "#2ad4ff", "#ffc93c"];
+      drawFighter(g, bot, cols[i % cols.length], bot.name);
+    });
+  }
   // HP
   g.fillStyle = "rgba(0,0,0,.55)"; g.fillRect(10, 10, 380, 10);
   g.fillStyle = "#2eff7e"; g.fillRect(10, 10, 380 * clamp(s.me.hp / 200, 0, 1), 10);
@@ -1175,9 +1215,7 @@ export function openClickDuel(cfg) {
   el("shooter-hp").classList.add("hidden");
   const top = el("shooter-top");
   top.insertAdjacentHTML("beforeend", `<div id="click-duel-ui" style="flex:1;text-align:center;padding:40px 10px">
-    <div style="font-size:13px;color:#9aa3bd;margin-bottom:14px">دکمهٔ بزرگ را بزن! سریع‌تر از حریف واقعی</div>
-    <button id="click-duel-btn" style="width:180px;height:180px;border-radius:50%;font-size:44px;font-weight:900;
-      background:radial-gradient(circle at 35% 30%,#3a4a8a,#151b38 70%);border:2px solid rgba(124,92,255,.6);box-shadow:0 0 34px rgba(124,92,255,.4)">👊</button>
+    <div style="font-size:13px;color:#9aa3bd;margin-bottom:14px">دکadient(circle at 35% 30%,#3a4a8a,#151b38 70%);border:2px solid rgba(124,92,255,.6);box-shadow:0 0 34px rgba(124,92,255,.4)">👊</button>
     <div style="display:flex;justify-content:center;gap:34px;margin-top:18px;font-weight:900">
       <span style="color:#6fa8ff">تو: <b id="cd-my">۰</b></span>
       <span style="color:#ff8099">${esc(cfg.opp.name)}: <b id="cd-opp">۰</b></span>
@@ -1239,7 +1277,7 @@ export function hideClickDuel() {
 
 /* ---------- پاکسازی ---------- */
 export function openFfaArena(cfg) {
-  const dummy = { id: "wait", name: "منتظر بازیکن", level: 1, power: 10 };
+  const dummy = { id: "wait", name: "ربات تمرینی", level: Math.max(1, cfg.me?.level || 1), power: 10 };
   openShooterDuel({
     duelId: "ffa-" + (cfg.code || "x"),
     me: cfg.me,
@@ -1253,7 +1291,26 @@ export function openFfaArena(cfg) {
   });
   if (el("shooter-vs")) el("shooter-vs").textContent = `نبرد آزاد ${cfg.code || ""} — تا ۱۰۰ نفر`;
   if (el("shooter-time")) el("shooter-time").textContent = "۱۸۰";
-  if (shooter) shooter.time = 180;
+  if (shooter) {
+    shooter.time = 180;
+    shooter.opp.x = -400;
+    shooter.opp.y = -400;
+    shooter.opp.lastInput = nowMs() + 1e12;
+    const names = ["سایهٔ سرگردان", "شکارچی وحشی", "روح دروازه", "غارتگر", "نگهبان", "شبح", "طوفان‌زن", "نفرین‌زده"];
+    const n = Math.min(10, Math.max(4, 3 + Math.floor((cfg.me?.level || 1) / 12)));
+    shooter.bots = [];
+    for (let i = 0; i < n; i++) {
+      shooter.bots.push({
+        id: "bot" + i,
+        name: names[i % names.length] + " " + faNum(i + 1),
+        x: 70 + Math.random() * 660,
+        y: 40 + Math.random() * 360,
+        hp: 55 + i * 9 + Math.floor((cfg.me?.level || 1) * 1.2),
+        dir: Math.random() * Math.PI * 2,
+        lastFire: nowMs() + 400 + i * 80,
+      });
+    }
+  }
 }
 
 export function cleanup() {

@@ -620,7 +620,7 @@ begin
   update public.friends set status = 'accepted' where user_id = p_user and friend_id = v_me;
   insert into public.friends (user_id, friend_id, status) values (v_me, p_user, 'accepted')
   on conflict (user_id, friend_id) do update set status = 'accepted';
-  perform public.push_notif(p_user, 'friend', 'دوستی قبول شد', 'حالا می‌توانید با هم FFA بازی کنید', '{}'::jsonb);
+  perform public.push_notif(p_user, 'friend', 'دوستی قبول شد', 'حالا می‌توانید با هم نبرد آزاد بازی کنید', '{}'::jsonb);
   return json_build_object('ok', true);
 end;
 $$;
@@ -662,7 +662,7 @@ declare
   v_name text;
 begin
   if v_me is null then return json_build_object('error', 'ابتدا وارد شوید'); end if;
-  v_name := coalesce(nullif(trim(p_name), ''), 'FFA');
+  v_name := coalesce(nullif(trim(p_name), ''), 'نبرد آزاد');
   v_code := upper(substr(replace(v_id::text, '-', ''), 1, 6));
   insert into public.ffa_rooms (id, code, name, owner, members)
   values (v_id, v_code, v_name, v_me, jsonb_build_array(v_me));
@@ -699,7 +699,7 @@ begin
   select id into v_other from public.accounts where username = trim(lower(p_username));
   if v_other is null then return json_build_object('error', 'بازیکن پیدا نشد'); end if;
   select username into v_myname from public.players where user_id = v_me;
-  perform public.push_notif(v_other, 'ffa', 'دعوت FFA', coalesce(v_myname,'شکارچی') || ' تو را به لابی ' || upper(trim(p_code)) || ' دعوت کرد', jsonb_build_object('code', upper(trim(p_code))));
+  perform public.push_notif(v_other, 'ffa', 'دعوت نبرد آزاد', coalesce(v_myname,'شکارچی') || ' تو را به لابی ' || upper(trim(p_code)) || ' دعوت کرد', jsonb_build_object('code', upper(trim(p_code))));
   return json_build_object('ok', true);
 end;
 $$;
@@ -742,12 +742,26 @@ grant execute on function public.join_room(uuid) to anon, authenticated;
 grant execute on function public.current_user_id() to anon, authenticated;
 grant execute on function public.save_full_state(jsonb) to anon, authenticated;
 grant execute on function public.load_full_state() to anon, authenticated;
+grant execute on function public.push_notif(uuid, text, text, text, jsonb) to anon, authenticated;
+grant execute on function public.friend_request(text) to anon, authenticated;
+grant execute on function public.friend_accept(uuid) to anon, authenticated;
+grant execute on function public.friend_list() to anon, authenticated;
+grant execute on function public.notif_list() to anon, authenticated;
+grant execute on function public.notif_read_all() to anon, authenticated;
+grant execute on function public.ffa_create(text) to anon, authenticated;
+grant execute on function public.ffa_join(text) to anon, authenticated;
+grant execute on function public.ffa_invite(text, text) to anon, authenticated;
+grant execute on function public.ffa_list() to anon, authenticated;
 grant select on public.accounts to anon, authenticated;
 grant select on public.sessions to anon, authenticated;
 grant select, insert, update on public.players to anon, authenticated;
 grant select, insert on public.chat_messages to anon, authenticated;
 grant select, insert, update on public.chat_rooms to anon, authenticated;
 grant select, insert, update on public.duels to anon, authenticated;
+grant select, insert, update on public.friends to anon, authenticated;
+grant select, insert, update on public.notifs to anon, authenticated;
+grant select, insert, update on public.ffa_rooms to anon, authenticated;
+grant usage, select on all sequences in schema public to anon, authenticated;
 
 -- تازه‌سازی کش PostgREST
 notify pgrst, 'reload schema';

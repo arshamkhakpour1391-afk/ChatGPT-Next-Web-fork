@@ -111,14 +111,28 @@ export function updateNotifDot() {
   const st = app.getSt();
   $("notif-dot").classList.toggle("hidden", !(st.unreadNotifs > 0));
 }
-$("btn-notifs")?.addEventListener("click", () => {
+$("btn-notifs")?.addEventListener("click", async () => {
   const st = app.getSt();
   st.unreadNotifs = 0;
   app.save(); updateNotifDot();
-  const list = (st.events || []).slice(0, 40).map((e) =>
+  let extra = "";
+  if (app.isLoggedIn() && app.isCloud && app.isCloud()) {
+    try {
+      const r = await cloud.notifList();
+      if (r.list && r.list.length) {
+        extra = r.list.slice(0, 20).map((n) =>
+          `<div class="duel-history-item win">
+            <div><b>${esc(n.title || "ابر")}</b><br><span style="font-size:9px">${esc(n.body || "")} — ${timeAgo(new Date(n.created_at).getTime())}</span></div>
+          </div>`).join("");
+        cloud.notifReadAll();
+      }
+    } catch (e) {}
+  }
+  const loc = (st.events || []).slice(0, 40).map((e) =>
     `<div class="duel-history-item ${e.type === "bad" ? "loss" : "win"}">
       <div><b>${esc(e.title)}</b><br><span style="font-size:9px">${esc(e.body)} — ${timeAgo(e.ts)}</span></div>
-    </div>`).join("") || "<p>هنوز رویدادی نیست.</p>";
+    </div>`).join("");
+  const list = extra + loc || "<p>هنوز رویدادی نیست.</p>";
   modal({ title: "اعلان‌های سیستم", body: `<div class="list" style="padding:0">${list}</div>`, actions: [{ label: "بستن", cb() {} }] });
 });
 
@@ -1453,7 +1467,7 @@ function renderDuelHistory() {
   const h = (st.duelLog || []).slice(0, 12);
   if (!h.length) { box.innerHTML = "<p>هنوز مبارزه‌ای نداشتی.</p>"; return; }
   h.forEach((e) => {
-    box.appendChild(make(`<div class="duel-history-item ${e.won ? "win" : "loss"}"><div><b>${e.won ? "برد" : "باخت"}</b> در برابر ${esc(e.opp)} (${e.mode === "shooter" ? "شوتر" : e.mode === "ffa" ? "FFA" : "کلیکی"})</div><span>${timeAgo(e.ts)}</span></div>`));
+    box.appendChild(make(`<div class="duel-history-item ${e.won ? "win" : "loss"}"><div><b>${e.won ? "برد" : "باخت"}</b> در برابر ${esc(e.opp)} (${e.mode === "shooter" ? "شوتر" : e.mode === "ffa" ? "نبرد آزاد" : "کلیکی"})</div><span>${timeAgo(e.ts)}</span></div>`));
   });
 }
 
@@ -1494,28 +1508,37 @@ async function renderFriends() {
     return;
   }
   list.slice(0, 20).forEach((p) => {
-    const b = make(`<button type="button" class="btn btn-ghost btn-sm" style="width:100%;margin-top:4px">${esc(p.username)}</button>`);
+    const pending = p.status === "pending";
+    const b = make(`<button type="button" class="btn btn-ghost btn-sm" style="width:100%;margin-top:4px">${esc(p.username)}${pending ? " · درخواست" : ""}</button>`);
     b.addEventListener("click", () => {
+      const acts = [];
+      if (pending && p.user_id) {
+        acts.push({ label: "قبول دوستی", cls: "btn-green", cb() {
+          cloud.friendAccept(p.user_id).then((r) => {
+            toast(r.error || "دوست شدی", r.error ? "bad" : "good");
+            renderFriends();
+          });
+        } });
+      }
+      acts.push({ label: "دعوت نبرد آزاد", cls: "btn-gold", cb() {
+        modal({
+          title: "کد لابی نبرد آزاد",
+          body: `<label class="field"><span>کد ۶ حرفی</span><input id="inv-code" maxlength="8"></label>`,
+          actions: [
+            { label: "ارسال دعوت", cls: "btn-primary", cb() {
+              const c = $("inv-code")?.value.trim();
+              if (c) cloud.ffaInvite(c, p.username).then((r) => toast(r.error || "دعوت فرستاده شد", r.error ? "bad" : "good"));
+            } },
+            { label: "انصراف", cb() {} }
+          ]
+        });
+      } });
+      acts.push({ label: "پیام", cb() { openDM(p.user_id || p.username, p.username); } });
+      acts.push({ label: "بستن", cb() {} });
       modal({
         title: p.username,
-        body: `<p>دوستت را به FFA دعوت کن یا پیام بده.</p>`,
-        actions: [
-          { label: "دعوت FFA", cls: "btn-gold", cb() {
-            modal({
-              title: "کد لابی FFA",
-              body: `<label class="field"><span>کد ۶ حرفی</span><input id="inv-code" maxlength="8"></label>`,
-              actions: [
-                { label: "ارسال دعوت", cls: "btn-primary", cb() {
-                  const c = $("inv-code")?.value.trim();
-                  if (c) cloud.ffaInvite(c, p.username).then((r) => toast(r.error || "دعوت فرستاده شد", r.error ? "bad" : "good"));
-                } },
-                { label: "انصراف", cb() {} }
-              ]
-            });
-          } },
-          { label: "پیام", cb() { openDM(p.user_id || p.username, p.username); } },
-          { label: "بستن", cb() {} }
-        ]
+        body: `<p>${pending ? "این درخواست دوستی هنوز قبول نشده." : "دوستت را به نبرد آزاد دعوت کن یا پیام بده."}</p>`,
+        actions: acts
       });
     });
     box.appendChild(b);
@@ -1526,7 +1549,7 @@ async function refreshFfaList() {
   if (!box) return;
   const r = await cloud.ffaList();
   if (r.error || !r.list || !r.list.length) {
-    box.innerHTML = `<p style="text-align:center;color:var(--txt3);padding:8px">لابی باز نیست. «FFA تا ۱۰۰ نفر» را بزن یا با کد وارد شو.</p>`;
+    box.innerHTML = `<p style="text-align:center;color:var(--txt3);padding:8px">لابی باز نیست. «نبرد آزاد تا ۱۰۰ نفر» را بزن یا با کد وارد شو. بدون ابر هم تمرین محلی با ربات باز می‌شود.</p>`;
     if ($("ffa-count")) $("ffa-count").textContent = "۰ لابی";
     return;
   }
@@ -1544,15 +1567,22 @@ async function refreshFfaList() {
 }
 async function createFfaLobby() {
   const st = app.getSt();
-  if (!app.isLoggedIn()) return toast("برای FFA باید وارد شوی", "bad");
-  const r = await cloud.ffaCreate((st.username || "FFA") + " lobby");
-  if (r.error) return toast(r.error, "bad");
-  toast(`لابی ساخته شد — کد ${r.code}`, "gold", 5000);
-  addEvent("لابی FFA", `کد: ${r.code}`, "good");
-  startFfaSession(r.code, r.id, true);
+  if (app.isLoggedIn() && app.isCloud && app.isCloud()) {
+    const r = await cloud.ffaCreate((st.username || "شکارچی") + " — نبرد آزاد");
+    if (!r.error && r.code) {
+      toast(`لابی ساخته شد — کد ${r.code}`, "gold", 5000);
+      addEvent("لابی نبرد آزاد", `کد: ${r.code}`, "good");
+      startFfaSession(r.code, r.id, true);
+      return;
+    }
+    toast(r.error ? String(r.error) : "ابر لابی نساخت — تمرین محلی شروع شد", "info", 3200);
+  } else if (!app.isLoggedIn()) {
+    toast("بدون حساب هم تمرین محلی باز می‌شود — برای لابی واقعی وارد شو", "info", 3600);
+  }
+  startFfaSession("محلی", "local", true);
 }
 async function joinFfa(code) {
-  if (!app.isLoggedIn()) return toast("برای FFA باید وارد شوی", "bad");
+  if (!app.isLoggedIn()) return toast("برای ورود به لابی واقعی باید وارد شوی — یا لابی محلی بساز", "bad");
   const r = await cloud.ffaJoin(code);
   if (r.error) return toast(r.error, "bad");
   toast(`وارد لابی ${r.code} شدی`, "good");
@@ -1572,9 +1602,9 @@ function startFfaSession(code, id, isHost) {
     onEnd: (res) => {
       st.stats.duels = (st.stats.duels || 0) + 1;
       st.duelLog = st.duelLog || [];
-      st.duelLog.unshift({ opp: "FFA " + code, won: !!res.won, mode: "ffa", ts: nowMs() });
-      if (res.won) { st.stats.wins++; addRankPts(st, 22); gainGold(st, 140 + st.level * 20); addXP(st, 400); toast("برنده FFA شدی!", "gold"); }
-      else { st.stats.losses++; toast("از FFA خارج شدی", "info"); }
+      st.duelLog.unshift({ opp: "نبرد آزاد " + code, won: !!res.won, mode: "ffa", ts: nowMs() });
+      if (res.won) { st.stats.wins++; addRankPts(st, 22); gainGold(st, 140 + st.level * 20); addXP(st, 400); toast("برنده نبرد آزاد شدی!", "gold"); }
+      else { st.stats.losses++; toast("از نبرد آزاد خارج شدی", "info"); }
       app.save(); renderTopbar();
       if (currentPage === "duel") renderDuelTab();
     }
@@ -1925,7 +1955,7 @@ $("btn-settings").addEventListener("click", () => {
     title: "تنظیمات",
     body: `
       <div class="m-meta" style="justify-content:space-between"><span>وضعیت ابر: <b>${cloudState}</b></span><span>دیتابیس: <b>${cloud.schemaReady() ? "✅ نصب شده" : "❌ نصب نشده"}</b></span></div>
-      <div class="m-meta" style="justify-content:space-between"><span>حساب: <b>${esc(st.username)}</b></span><span>سیستم سولو ۳.۴</span></div>
+      <div class="m-meta" style="justify-content:space-between"><span>حساب: <b>${esc(st.username)}</b></span><span>سیستم سولو ۳.۵</span></div>
       <div class="m-meta"><span>همگام ابر: <b>${app.isCloud && app.isCloud() ? "فعال — مهارت و آمار کامل" : "محلی (وقتی اینترنت باشد می‌رود روی ابر)"}</b></span></div>
       <p style="margin-top:10px">ساختهٔ ارشام — داده‌ها روی ابر و دستگاه می‌مانند.</p>
       <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px">

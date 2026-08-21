@@ -441,7 +441,7 @@ export async function notifReadAll() {
 }
 export async function ffaCreate(name) {
   try {
-    const { data, error } = await withTimeout(sb.rpc("ffa_create", { p_name: name || "FFA" }));
+    const { data, error } = await withTimeout(sb.rpc("ffa_create", { p_name: name || "نبرد آزاد" }));
     if (error) return { error: friendlyError(error) };
     const out = unwrapRpc(data);
     if (out && out.error) return { error: out.error };
