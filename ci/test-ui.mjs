@@ -101,6 +101,10 @@ t("فروشگاه: تب‌ها + تخفیف روزانه + آیتم", () => {
   assert.ok(qa("#shop-grid .item-card").length > 15, "آیتم‌های سلاح");
   click(qa(".s-tab").find((b) => b.dataset.sc === "stone"));
   assert.ok(qa("#shop-grid .item-card").length >= 10, "سنگ‌های سایه");
+  click(qa(".s-tab").find((b) => b.dataset.sc === "weapon"));
+  const n0 = qa("#shop-grid .item-card").length;
+  if (q("#shop-more")) click(q("#shop-more"));
+  assert.ok(qa("#shop-grid .item-card").length >= n0, "بار بیشتر کاتالوگ");
 });
 
 t("کیف: مهارت‌ها قفل هستند (هیچی از اول فعال نیست)", () => {

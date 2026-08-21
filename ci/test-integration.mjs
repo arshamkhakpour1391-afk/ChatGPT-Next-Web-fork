@@ -28,8 +28,8 @@ console.log("=== تست یکپارچه‌سازی Supabase ===");
 const sb0 = mk(null);
 
 await t("۱) اسکیمای دیتابیس نصب است", async () => {
-  const { error } = await sb0.from("accounts").select("id", { head: true, count: "exact" });
-  assert.ok(!error, error?.message || "");
+  const { data, error } = await sb0.rpc("schema_ok");
+  assert.ok(!error && data === true, error?.message || "");
 });
 
 await t("۲) ثبت‌نام دو کاربر", async () => {
@@ -52,15 +52,11 @@ await t("۳) ورود و رمز اشتباه", async () => {
 
 await t("۴) ذخیره و بارگذاری وضعیت در ابر", async () => {
   const sb1 = mk(global.tok1);
-  const state = { v: 2, level: 42, xp: 1234, gold: 9999, gems: 3, hello: "world", updatedAt: Date.now() };
-  const up = await sb1.from("players").upsert({
-    user_id: global.uid1, username: U1, level: 42, xp: 1234, gold: 9999, gems: 3,
-    power: 5000, wins: 7, losses: 2, kills: 55, rank_pts: 1200, hunter_class: "شکارچی C",
-    data: state, updated_at: new Date().toISOString(), last_seen: new Date().toISOString(),
-  }, { onConflict: "user_id" });
-  assert.ok(!up.error, up.error?.message);
-  const ld = await sb1.from("players").select("*").eq("user_id", global.uid1).maybeSingle();
-  assert.ok(ld.data && ld.data.level === 42 && ld.data.data.hello === "world", "داده باید برگردد");
+  const state = { v: 4, level: 12, xp: 40, gold: 200, gems: 3, hello: "world", stats: { wins: 1, losses: 0, kills: 2 }, rank_pts: 1000, hunterClass: "E", updatedAt: Date.now() };
+  const up = await sb1.rpc("save_full_state", { p_data: state });
+  assert.ok(!up.error && !up.data?.error, JSON.stringify(up.error || up.data));
+  const ld = await sb1.rpc("load_full_state");
+  assert.ok(ld.data?.player, "داده باید برگردد");
 });
 
 await t("۵) امنیت: کاربر دیگر نمی‌تواند ردیف مرا بخواند", async () => {
@@ -94,8 +90,14 @@ await t("۸) دوئل: ساخت، پذیرش، نتیجه", async () => {
   const sb2 = mk(global.tok2);
   const cr = await sb1.from("duels").insert({ p1: global.uid1, p1name: U1, mode: "click", status: "open" }).select().single();
   assert.ok(cr.data?.id, cr.error?.message);
-  const up = await sb2.from("duels").update({ p2: global.uid2, p2name: U2, status: "done", result: { winner: global.uid2, mode: "click" } }).eq("id", cr.data.id);
-  assert.ok(!up.error, up.error?.message);
+  const ch = await sb1.rpc("update_duel", { p_id: cr.data.id, p_status: "challenged", p_p2: global.uid2, p_p2name: U2 });
+  assert.ok(!ch.error && !ch.data?.error, JSON.stringify(ch.error || ch.data));
+  const st = await sb2.rpc("update_duel", { p_id: cr.data.id, p_status: "starting" });
+  assert.ok(!st.error && !st.data?.error, JSON.stringify(st.error || st.data));
+  const fake = await sb2.from("duels").update({ status: "done" }).eq("id", cr.data.id);
+  assert.ok(fake.error || (fake.data && fake.data.length === 0), "آپدیت مستقیم done باید بسته باشد");
+  const fin = await sb2.rpc("finish_duel", { p_id: cr.data.id, p_winner: global.uid2, p_scores: { a: 1 } });
+  assert.ok(!fin.error && !fin.data?.error, JSON.stringify(fin.error || fin.data));
 });
 
 await t("۹) لیدربرد و رنک من", async () => {

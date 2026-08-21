@@ -14,6 +14,7 @@ import {
   autoEquipBest, claimAllReady, dailyFeatured, achievementsOf,
   spendStat, upgradeShadow, fuseShadows, sweepDungeon, markFailedMission,
   featuredMult, firstClearMult, codexStats, energyCap, migrateState,
+  applyDuelOutcome, dungeonPoolForSort,
 } from "./engine.js";
 import {
   dungeonIndex, bossIndex, skillIndex, DUNGEON_COUNT, BOSS_COUNT, SKILL_COUNT,
@@ -677,9 +678,8 @@ export function renderGates() {
   const order = [];
   const need = gateShown + 1;
   if (gateSort === "gold" || gateSort === "done") {
-    const start = Math.max(0, (st.level - 8) * 10);
-    const end = Math.min(DUNGEON_COUNT, start + 500);
-    for (let i = start; i < end; i++) {
+    const idxs = dungeonPoolForSort(st, gateSort);
+    for (const i of idxs) {
       const d = dungeonIndex(i);
       if (match(d)) order.push(d);
     }
@@ -945,13 +945,14 @@ function doExtract(src, stoneId) {
 /* ================= فروشگاه ================= */
 let shopCat = "weapon";
 let shopSort = "default";
+let shopExtra = 36;
 export function renderShop() {
   const st = app.getSt();
   if (!$("shop-tabs").children.length) {
     SHOP_CATS.forEach((c) => {
       const b = make(`<button class="s-tab ${c.key === shopCat ? "active" : ""}" data-sc="${c.key}">${c.icon} ${c.name}</button>`);
       b.addEventListener("click", () => {
-        shopCat = c.key;
+        shopCat = c.key; shopExtra = 36;
         document.querySelectorAll(".s-tab").forEach((x) => x.classList.toggle("active", x === b));
         renderShop();
       });
@@ -1000,6 +1001,11 @@ export function renderShop() {
     card.querySelector("[data-info]").addEventListener("click", () => inspectThing(it));
     grid.appendChild(card);
   });
+  const more = $("shop-more");
+  if (more) {
+    more.classList.toggle("hidden", shopExtra >= 400);
+    more.onclick = () => { shopExtra += 36; renderShop(); };
+  }
 }
 function buyFromShop(itemId, deal) {
   const st = app.getSt();
@@ -1433,40 +1439,34 @@ function startDuelSession(duelId, mode, isHost, me, opp, duelRow) {
   const onEnd = async (res) => {
     activeDuel = null;
     const st = app.getSt();
-    st.stats.duels = (st.stats.duels || 0) + 1;
     const oppName = me.id === duelRow?.p1 ? (duelRow?.p2name || opp.name) : (duelRow?.p1name || opp.name);
-    st.duelLog = st.duelLog || [];
-    st.duelLog.unshift({ opp: oppName, won: res.won, mode, ts: nowMs() });
-    if (st.duelLog.length > 30) st.duelLog.length = 30;
-    if (res.won) {
-      st.stats.wins++;
-      applyProgress(st, "duels", 1);
-      addRankPts(st, 18 + Math.floor(st.level / 5));
-      const g = 100 + st.level * 35;
-      gainGold(st, g);
-      addXP(st, 300 + st.level * 60);
-      toast(`🏆 پیروزی! +${fmtNum(g)} طلا و XP`, "gold", 4000);
+    const scores = { [me.id]: res.meClicks ?? res.meHp, [opp.id]: res.oppClicks ?? res.oppHp };
+    let fin = { error: "no-server" };
+    try {
+      fin = await cloud.finishDuel(duelId, res.won ? me.id : opp.id, scores);
+    } catch (e) { fin = { error: e }; }
+    cloud.closeDuelChannel(duelId);
+    const winnerId = (fin && fin.result && fin.result.winner) || (fin && fin.winner);
+    const confirmed = !!(fin && fin.ok && !fin.error);
+    if (!confirmed) {
+      toast("نتیجه روی سرور ثبت نشد — جایزه داده نشد", "bad", 4200);
+      if (currentPage === "duel") renderDuelTab();
+      return;
+    }
+    const won = winnerId ? (winnerId === me.id) : !!res.won;
+    const out = applyDuelOutcome(st, { won, confirmed: true, duelId, oppName, mode });
+    if (out.error === "already") { if (currentPage === "duel") renderDuelTab(); return; }
+    if (won) {
+      toast(`🏆 پیروزی! +${fmtNum(out.gold)} طلا و XP`, "gold", 4000);
       sfx.win(); confetti();
-      addEvent("پیروزی در رقابت", `حریف ${me.name === duelRow?.p1name ? duelRow?.p2name : duelRow?.p1name || opp.name} را شکست دادی`, "good");
+      addEvent("پیروزی در رقابت", `حریف ${oppName} را شکست دادی`, "good");
     } else {
-      st.stats.losses++;
-      addRankPts(st, -10);
-      const loss = Math.min(st.gold, 40 + st.level * 8);
-      st.gold -= loss;
-      toast(`شکست خوردی... ${fmtNum(loss)} طلا از دست دادی. دفعهٔ بعد انتقام بگیر!`, "bad", 4000);
+      toast(`شکست خوردی... ${fmtNum(out.goldLoss)} طلا از دست دادی. دفعهٔ بعد انتقام بگیر!`, "bad", 4000);
       sfx.lose();
-      addEvent("شکست در رقابت", `به ${opp.name} باختی — قوی‌تر برگرد`, "bad");
+      addEvent("شکست در رقابت", `به ${oppName} باختی — قوی‌تر برگرد`, "bad");
     }
     app.save();
     renderTopbar();
-    // ثبت نتیجه در ابر
-    try {
-      await cloud.updateDuel(duelId, {
-        status: "done",
-        result: { winner: res.won ? me.id : opp.id, mode, scores: { [me.id]: res.meClicks ?? res.meHp, [opp.id]: res.oppClicks ?? res.oppHp }, forfeit: !!res.forfeit, finishedAt: nowMs() }
-      });
-    } catch (e) {}
-    cloud.closeDuelChannel(duelId);
     if (currentPage === "duel") renderDuelTab();
   };
   if (mode === "shooter") {
@@ -1971,7 +1971,7 @@ $("btn-settings").addEventListener("click", () => {
     title: "تنظیمات",
     body: `
       <div class="m-meta" style="justify-content:space-between"><span>وضعیت ابر: <b>${cloudState}</b></span><span>دیتابیس: <b>${cloud.schemaReady() ? "✅ نصب شده" : "❌ نصب نشده"}</b></span></div>
-      <div class="m-meta" style="justify-content:space-between"><span>حساب: <b>${esc(st.username)}</b></span><span>سیستم سولو ۳.۷</span></div>
+      <div class="m-meta" style="justify-content:space-between"><span>حساب: <b>${esc(st.username)}</b></span><span>سیستم سولو ۳.۸</span></div>
       <div class="m-meta"><span>همگام ابر: <b>${app.isCloud && app.isCloud() ? "فعال — مهارت و آمار کامل" : "محلی (وقتی اینترنت باشد می‌رود روی ابر)"}</b></span></div>
       <p style="margin-top:10px">ساختهٔ ارشام — داده‌ها روی ابر و دستگاه می‌مانند.</p>
       <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px">

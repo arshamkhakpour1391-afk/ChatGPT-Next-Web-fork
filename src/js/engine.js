@@ -925,6 +925,49 @@ export function achievementsOf(st) {
   ];
 }
 
+export function applyDuelOutcome(st, opts) {
+  const won = !!(opts && opts.won);
+  const confirmed = !!(opts && opts.confirmed);
+  const duelId = opts && opts.duelId;
+  if (!confirmed) return { error: "unconfirmed" };
+  st.duelLog = st.duelLog || [];
+  if (duelId && st.duelLog.some((e) => e.duelId === duelId)) return { error: "already" };
+  st.stats.duels = (st.stats.duels || 0) + 1;
+  st.duelLog.unshift({ opp: (opts && opts.oppName) || "حریف", won, mode: (opts && opts.mode) || "click", ts: nowMs(), duelId: duelId || null });
+  if (st.duelLog.length > 30) st.duelLog.length = 30;
+  if (won) {
+    st.stats.wins = (st.stats.wins || 0) + 1;
+    applyProgress(st, "duels", 1);
+    addRankPts(st, 18 + Math.floor(st.level / 5));
+    const g = 100 + st.level * 35;
+    gainGold(st, g);
+    addXP(st, 300 + st.level * 60);
+    st.updatedAt = nowMs();
+    return { ok: true, won: true, gold: g };
+  }
+  st.stats.losses = (st.stats.losses || 0) + 1;
+  addRankPts(st, -10);
+  const loss = Math.min(st.gold, 40 + st.level * 8);
+  st.gold -= loss;
+  st.updatedAt = nowMs();
+  return { ok: true, won: false, goldLoss: loss };
+}
+
+export function dungeonPoolForSort(st, sort) {
+  const cleared = Object.keys(st.dungeons || {}).filter((k) => st.dungeons[k] && st.dungeons[k].cleared).map(Number);
+  if (sort === "done") return cleared.slice().sort((a, b) => b - a);
+  const start = Math.max(0, ((st.level || 1) - 8) * 10);
+  const nearby = [];
+  for (let i = start; i < Math.min(10000, start + 500); i++) nearby.push(i);
+  if (sort === "gold") return [...new Set(nearby.concat(cleared))];
+  return nearby;
+}
+
+export function sqlPowerCap(level) {
+  const lv = Math.max(1, Math.min(10000, Number(level) || 1));
+  return lv * 200000 + 50000000;
+}
+
 export function failOverdueMissions(st) {
   if (!st) return null;
   const now = nowMs();

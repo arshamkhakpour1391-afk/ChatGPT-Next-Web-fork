@@ -1,17 +1,23 @@
 /* تکسچر برداری ۴K برای آیتم، باس، دروازه و پروفایل — بدون فایل بیت‌مپ سنگین */
 import { mulberry32, seedOf } from "./util.js";
 
-export const TEX_PX = 4096;
+export const TEX_PX = 256;
 
 function hsl(h, s, l, a) {
   return a == null ? `hsl(${h % 360},${s}%,${l}%)` : `hsla(${h % 360},${s}%,${l}%,${a})`;
 }
 
 const TEX_CACHE = new Map();
+const TEX_CACHE_MAX = 480;
 export function texUrl(kind, i, extra) {
   const key = String(kind) + ":" + (i | 0) + ":" + (extra || 0);
   const hit = TEX_CACHE.get(key);
-  if (hit) return hit;
+  if (hit) {
+    TEX_CACHE.delete(key);
+    TEX_CACHE.set(key, hit);
+    return hit;
+  }
+  const px = TEX_PX;
   const rng = mulberry32(seedOf("tex4k", kind, i, extra || 0));
   const h1 = Math.floor(rng() * 360);
   const h2 = (h1 + 28 + Math.floor(rng() * 70)) % 360;
@@ -20,31 +26,28 @@ export function texUrl(kind, i, extra) {
   parts.push(`<radialGradient id="a" cx="${20 + rng() * 40}%" cy="${18 + rng() * 30}%"><stop offset="0%" stop-color="${hsl(h1, 82, 72)}"/><stop offset="55%" stop-color="${hsl(h2, 70, 32)}"/><stop offset="100%" stop-color="${hsl(h3, 62, 10)}"/></radialGradient>`);
   parts.push(`<linearGradient id="b" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="${hsl(h2, 50, 80, 0.18)}"/><stop offset="100%" stop-color="${hsl(h1, 40, 8, 0.35)}"/></linearGradient>`);
   const shapes = [];
-  const n = kind === "boss" ? 22 : 14;
+  const n = kind === "boss" ? 8 : 6;
   for (let k = 0; k < n; k++) {
-    const x = Math.floor(rng() * 4096), y = Math.floor(rng() * 4096);
-    const r = 70 + Math.floor(rng() * (kind === "boss" ? 1100 : 720));
+    const x = Math.floor(rng() * px), y = Math.floor(rng() * px);
+    const r = 8 + Math.floor(rng() * (kind === "boss" ? 70 : 48));
     shapes.push(`<circle cx="${x}" cy="${y}" r="${r}" fill="${hsl(h1 + k * 13, 68, 48, (0.1 + rng() * 0.32).toFixed(3))}"/>`);
   }
-  for (let k = 0; k < 7; k++) {
-    const y = Math.floor(rng() * 4096);
-    shapes.push(`<rect x="0" y="${y}" width="4096" height="${6 + Math.floor(rng() * 28)}" fill="${hsl(h2, 40, 88, 0.08)}"/>`);
+  for (let k = 0; k < 4; k++) {
+    const y = Math.floor(rng() * px);
+    shapes.push(`<rect x="0" y="${y}" width="${px}" height="${2 + Math.floor(rng() * 6)}" fill="${hsl(h2, 40, 88, 0.08)}"/>`);
   }
   if (kind === "weapon" || kind === "item") {
-    shapes.push(`<polygon points="2048,220 2480,1680 2048,1480 1616,1680" fill="${hsl(h1, 20, 92, 0.55)}"/>`);
-    shapes.push(`<rect x="1988" y="1480" width="120" height="2100" rx="40" fill="${hsl(h3, 30, 70, 0.45)}"/>`);
+    shapes.push(`<polygon points="${px / 2},14 ${px * 0.6},${px * 0.41} ${px / 2},${px * 0.36} ${px * 0.4},${px * 0.41}" fill="${hsl(h1, 20, 92, 0.55)}"/>`);
   }
   if (kind === "armor") {
-    shapes.push(`<path d="M900 900 L2048 520 L3196 900 L3000 3000 L1096 3000 Z" fill="${hsl(h2, 40, 40, 0.35)}" stroke="${hsl(h1, 70, 80, 0.5)}" stroke-width="36"/>`);
+    shapes.push(`<path d="M${px * 0.22} ${px * 0.22} L${px / 2} ${px * 0.13} L${px * 0.78} ${px * 0.22} L${px * 0.73} ${px * 0.73} L${px * 0.27} ${px * 0.73} Z" fill="${hsl(h2, 40, 40, 0.35)}" stroke="${hsl(h1, 70, 80, 0.5)}" stroke-width="3"/>`);
   }
   if (kind === "boss" || kind === "dungeon") {
-    shapes.push(`<ellipse cx="2048" cy="1680" rx="980" ry="720" fill="${hsl(h3, 70, 12, 0.45)}"/>`);
-    shapes.push(`<circle cx="1700" cy="1500" r="140" fill="${hsl(h1, 90, 62, 0.85)}"/>`);
-    shapes.push(`<circle cx="2390" cy="1500" r="140" fill="${hsl(h1, 90, 62, 0.85)}"/>`);
+    shapes.push(`<ellipse cx="${px / 2}" cy="${px * 0.41}" rx="${px * 0.24}" ry="${px * 0.18}" fill="${hsl(h3, 70, 12, 0.45)}"/>`);
   }
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4096 4096" width="4096" height="4096"><defs>${parts.join("")}</defs><rect width="4096" height="4096" fill="url(#a)"/>${shapes.join("")}<rect width="4096" height="4096" fill="url(#b)"/><rect x="48" y="48" width="4000" height="4000" fill="none" stroke="${hsl(h2, 80, 72, 0.4)}" stroke-width="40"/></svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${px} ${px}" width="${px}" height="${px}"><defs>${parts.join("")}</defs><rect width="${px}" height="${px}" fill="url(#a)"/>${shapes.join("")}<rect width="${px}" height="${px}" fill="url(#b)"/></svg>`;
   const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
-  if (TEX_CACHE.size > 480) {
+  if (TEX_CACHE.size >= TEX_CACHE_MAX) {
     const first = TEX_CACHE.keys().next().value;
     TEX_CACHE.delete(first);
   }

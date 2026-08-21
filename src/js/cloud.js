@@ -1,6 +1,6 @@
 /* ================= لایهٔ ابری (Supabase) + ری‌تایم ================= */
 import { createClient } from "@supabase/supabase-js";
-import { nowMs, sleep } from "./util.js";
+import { nowMs, sleep, setServerNow } from "./util.js";
 
 export const SUPABASE_URL = "https://baooyxmxzkzwimitjfjk.supabase.co";
 export const SUPABASE_KEY = "sb_publishable_n8EE3d9MUYK9ah_hdMi9kg_WhMsHKRI";
@@ -109,6 +109,7 @@ export async function savePlayer(state, cols) {
     const rpc = await withTimeout(sb.rpc("save_full_state", { p_data: packed }), 15000);
     if (!rpc.error && rpc.data && !rpc.data.error) {
       online = true;
+      if (rpc.data.server_ms) setServerNow(rpc.data.server_ms);
       emit("status", { online: true });
       return { ok: true };
     }
@@ -364,9 +365,16 @@ export async function updateDuel(id, patch) {
     if (patch && patch.status === "done") {
       return finishDuel(id, patch.result?.winner, patch.result?.scores || patch.result || {});
     }
-    const { error } = await withTimeout(sb.from("duels").update(patch).eq("id", id));
-    if (error) return { error };
-    return { ok: true };
+    const { data, error } = await withTimeout(sb.rpc("update_duel", {
+      p_id: id,
+      p_status: patch.status || null,
+      p_p2: patch.p2 || null,
+      p_p2name: patch.p2name || null,
+    }));
+    if (error) return { error: friendlyError(error) };
+    const out = unwrapRpc(data);
+    if (out && out.error) return { error: out.error };
+    return out || { ok: true };
   } catch (e) { return { error: e }; }
 }
 export async function finishDuel(id, winner, scores) {

@@ -463,14 +463,18 @@ export function verifyItem(it) {
   if (it.catalog && (!it.story || !it.tex || !it.rarity)) return false;
   return Object.keys(it.effects).length > 0;
 }
-export function shopListForCat(cat, extra = 24) {
+export function shopListForCat(cat, extra = 24, offset = 0) {
   const base = SHOP_ITEMS.filter((it) => it.cat === cat);
   if (!extra) return base;
   const more = [];
   const slot = CAT_KEYS.indexOf(cat);
   if (slot < 0) return base;
-  for (let i = slot; i < CATALOG_COUNT && more.length < extra; i += CAT_KEYS.length) more.push(catalogIndex(i));
-  return base.concat(more);
+  let skipped = 0;
+  for (let i = slot; i < CATALOG_COUNT && more.length < extra; i += CAT_KEYS.length) {
+    if (skipped++ < offset) continue;
+    more.push(catalogIndex(i));
+  }
+  return offset > 0 ? more : base.concat(more);
 }
 
 /* ---------- ماموریت‌ها (۱۰۰۰+ ترکیب) ---------- */

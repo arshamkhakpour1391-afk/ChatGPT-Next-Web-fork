@@ -134,6 +134,26 @@ t("فیلتر تیپ لیست را عوض می‌کند", () => {
   assert.ok(sub && sub.textContent.length > 2);
 });
 
+const clicksBeforeLogout = window.__slsState()?.stats?.clicks;
+click(q("#btn-settings"));
+await wait(80);
+click(q("#set-logout"));
+await wait(200);
+t("خروج از حساب صفحه ورود را می‌آورد", () => {
+  assert.ok(visible(q("#screen-auth")));
+});
+click(qa(".auth-tab").find((b) => b.dataset.authtab === "login"));
+q("#auth-user").value = "arshamtest";
+q("#auth-pass").value = "pass1234";
+q("#auth-form").dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
+await wait(400);
+t("ورود دوباره همان حساب محلی را نگه می‌دارد", () => {
+  assert.ok(visible(q("#screen-app")), q("#auth-err")?.textContent);
+  assert.ok(q("#hunter-name").textContent.includes("arshamtest"));
+  const st2 = window.__slsState();
+  assert.ok(st2 && st2.stats.clicks === clicksBeforeLogout, "کلیک‌ها نباید گم شوند");
+});
+
 t("هیچ خطای JS", () => {
   assert.equal((window.__slsErrors || []).length, 0, (window.__slsErrors || []).join(" | "));
 });

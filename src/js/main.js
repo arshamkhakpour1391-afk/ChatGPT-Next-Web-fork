@@ -445,7 +445,11 @@ window.__slsClickDuel = () => {
   });
 };
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden || !st) return;
+  if (!st) return;
+  if (document.hidden) {
+    try { saveNow(); } catch (e) {}
+    return;
+  }
   if (!el("screen-auth")?.classList.contains("hidden")) return;
   try {
     tickAndRender();
@@ -453,7 +457,11 @@ document.addEventListener("visibilitychange", () => {
     if (ui.currentPageName() === "home") ui.renderHome();
   } catch (e) { console.warn(e); }
 });
-window.addEventListener("beforeunload", () => { try { if (st) lsSet(stateKey(), st); } catch (e) {} });
+window.addEventListener("beforeunload", () => { try { if (st) saveNow(); } catch (e) {} });
+try {
+  const CapApp = window.Capacitor?.Plugins?.App;
+  CapApp?.addListener?.("pause", () => { try { if (st) saveNow(); } catch (e) {} });
+} catch (e) {}
 window.addEventListener("online", () => { ui.toast("اینترنت برگشت — در حال همگام‌سازی...", "good"); if (account) saveNow(); });
 
 initMute();

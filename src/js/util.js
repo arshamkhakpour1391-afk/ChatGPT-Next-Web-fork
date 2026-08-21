@@ -201,9 +201,17 @@ export function vibrate(ms) {
 export function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 export function deepClone(o) { try { return JSON.parse(JSON.stringify(o)); } catch (e) { return o; } }
 export function jsonEq(a, b) { try { return JSON.stringify(a) === JSON.stringify(b); } catch (e) { return false; } }
-export function nowMs() { return Date.now(); }
+/* ساعت: وقتی آنلاینیم آفست سرور اعمال می‌شود تا جلو کشیدن ساعت دستگاه مهلت ماموریت را عوض نکند.
+   منطقهٔ زمانی دستگاه برای todayKey می‌ماند (تصمیم آگاهانه — آفلاین بدون سرور). */
+let serverOffsetMs = 0;
+export function setServerNow(ms) {
+  const n = Number(ms);
+  if (!Number.isFinite(n) || n < 1e12) return;
+  serverOffsetMs = n - Date.now();
+}
+export function nowMs() { return Date.now() + serverOffsetMs; }
 export function todayKey() {
-  const d = new Date();
+  const d = new Date(nowMs());
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 export function keyToMs(k) {
@@ -212,7 +220,7 @@ export function keyToMs(k) {
   return new Date(p[0], p[1] - 1, p[2]).getTime();
 }
 export function weekKey() {
-  const d = new Date();
+  const d = new Date(nowMs());
   const day = (d.getDay() + 6) % 7; // شنبه = 0
   const start = new Date(d); start.setDate(d.getDate() - day);
   return start.toISOString().slice(0, 10);

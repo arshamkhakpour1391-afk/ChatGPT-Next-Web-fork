@@ -8,13 +8,13 @@ import {
   dailyQuests, claimDailyQuest, applyPunishment, activeDebuffs, tickState, yearState,
   claimYearDay, currentPicks, takePick, addRewardPick, missionBucket, calcDamage, newShadow, dailyDeals,
   claimDailyLogin, unlockTitles, addRankPts, regenEnergy, addBuff, activeBuffs, autoEquipBest, claimAllReady, dailyFeatured, achievementsOf,
-  spendStat, upgradeShadow, fuseShadows, sweepDungeon, markFailedMission, comboMult, battleAtkCd, energyCap, migrateState, featuredMult, firstClearMult, packCloudState, failOverdueMissions, punishMissedDaily
+  spendStat, upgradeShadow, fuseShadows, sweepDungeon, markFailedMission, comboMult, battleAtkCd, energyCap, migrateState, featuredMult, firstClearMult, packCloudState, failOverdueMissions, punishMissedDaily, applyDuelOutcome, dungeonPoolForSort, sqlPowerCap, combatStats as csExport
 } from "../src/js/engine.js";
 import { texUrl } from "../src/js/gfx.js";
 import {
   dungeonIndex, bossIndex, skillIndex, DUNGEON_COUNT, BOSS_COUNT, SKILL_COUNT,
   SHOP_ITEMS, SHOP_CATS, itemById, itemByName, yearQuestDay, YEAR_DAYS, missionOf,
-  ARCHETYPES, elementMult, CATALOG_COUNT, catalogIndex, shopListForCat, verifyItem,
+  ARCHETYPES, elementMult, CATALOG_COUNT, CATALOG_BASE, catalogIndex, shopListForCat, verifyItem,
   LEVEL_CAP, levelTag, hunterClass, rankOfLevel
 } from "../src/js/data.js";
 
@@ -454,6 +454,43 @@ t("ماموریت اجباری بدون UI مجازات می‌شود", () => {
   assert.equal(again, null);
 });
 
+t("کاتالوگ دور از ۲۵۰ با پارامتر UI فروشگاه دیده می‌شود", () => {
+  const list = shopListForCat("weapon", 180, 0);
+  assert.ok(list.some((it) => it.id >= CATALOG_BASE + 1000), "با extra=180 باید id>=101000 باشد");
+});
+t("دانجن پاک‌شده در مرتب‌سازی done بعد از لول بالا می‌ماند", () => {
+  const st = newState("t", "s");
+  st.level = 8000;
+  st.dungeons[3] = { cleared: true, count: 1 };
+  const pool = dungeonPoolForSort(st, "done");
+  assert.ok(pool.includes(3), "دانجن سطح پایین پاک‌شده باید بماند");
+  const goldPool = dungeonPoolForSort(st, "gold");
+  assert.ok(goldPool.includes(3));
+});
+t("آمار رزمی در سقف سطح منفی یا نامتناهی نیست", () => {
+  const st = newState("t", "s");
+  st.level = LEVEL_CAP;
+  st.spent = { hp: 4000, atk: 4000, def: 1000, crit: 1000 };
+  st.statPts = 0;
+  const cs = combatStats(st);
+  assert.ok(Number.isFinite(cs.hp) && cs.hp > 0);
+  assert.ok(Number.isFinite(cs.atk) && cs.atk > 0);
+  const p = computePower(st);
+  assert.ok(Number.isFinite(p) && p > 0);
+  assert.ok(p < sqlPowerCap(LEVEL_CAP), "قدرت مشروع باید زیر سقف SQL باشد: " + p);
+  assert.ok(Number.isFinite(xpNeed(LEVEL_CAP)) && xpNeed(LEVEL_CAP) > 0);
+});
+t("جایزه دوئل بدون تأیید سرور داده نمی‌شود", () => {
+  const st = newState("t", "s");
+  const g0 = st.gold;
+  const r = applyDuelOutcome(st, { won: true, confirmed: false, duelId: "x" });
+  assert.ok(r.error);
+  assert.equal(st.gold, g0);
+  const r2 = applyDuelOutcome(st, { won: true, confirmed: true, duelId: "x", oppName: "a", mode: "click" });
+  assert.ok(r2.ok && r2.gold > 0);
+  const r3 = applyDuelOutcome(st, { won: true, confirmed: true, duelId: "x" });
+  assert.equal(r3.error, "already");
+});
 t("تکسچر کش می‌شود و XP سقف محدود است", () => {
   const a = texUrl("item", 7);
   const b = texUrl("item", 7);

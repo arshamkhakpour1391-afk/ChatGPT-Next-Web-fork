@@ -7,8 +7,8 @@ android {
         applicationId "com.arsham.solosystem"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 37
-        versionName "3.7.0"
+        versionCode 38
+        versionName "3.8.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -18,12 +18,14 @@ android {
     }
     signingConfigs {
         release {
-            def ks = file("../keystore/solo-system.jks")
-            if (ks.exists()) {
-                storeFile ks
-                storePassword "solosystem"
-                keyAlias "solo"
-                keyPassword "solosystem"
+            def ksPropsFile = rootProject.file("keystore.properties")
+            if (ksPropsFile.exists()) {
+                def ksProps = new Properties()
+                ksProps.load(new java.io.FileInputStream(ksPropsFile))
+                storeFile rootProject.file(ksProps['storeFile'] ?: "keystore/release.jks")
+                storePassword ksProps['storePassword']
+                keyAlias ksProps['keyAlias']
+                keyPassword ksProps['keyPassword']
             }
         }
     }
@@ -32,10 +34,8 @@ android {
             minifyEnabled true
             shrinkResources false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            if (file("../keystore/solo-system.jks").exists()) {
+            if (rootProject.file("keystore.properties").exists()) {
                 signingConfig signingConfigs.release
-            } else {
-                signingConfig signingConfigs.debug
             }
         }
     }

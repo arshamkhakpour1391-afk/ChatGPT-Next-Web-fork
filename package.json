@@ -1,6 +1,6 @@
 {
   "name": "solo-leveling-system",
-  "version": "3.7.0",
+  "version": "3.8.0",
   "description": "سیستم سولو لولینگ — اپ کامل بازی Solo Leveling با سیستم ابری، لیدربرد، رقابت آنلاین و چت",
   "private": true,
   "scripts": {
@@ -8,10 +8,8 @@
     "dev": "node scripts/devserver.mjs",
     "test": "node ci/test-engine.mjs",
     "apk:add": "npx cap add android",
-    "test:ui": "node ci/test-ui.mjs",
-    "test:deep": "node ci/test-deep.mjs",
-    "make-apk": "python3 scripts/make-apk.py",
-    "apk": "python3 scripts/make-apk.py"
+    "test:ui": "node build.mjs && node ci/test-ui.mjs",
+    "test:deep": "node build.mjs && node ci/test-deep.mjs"
   },
   "dependencies": {
     "@capacitor/android": "6.2.0",

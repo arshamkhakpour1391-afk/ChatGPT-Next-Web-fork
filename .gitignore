@@ -8,3 +8,12 @@ android/app/build/
 android/build/
 android/.gradle/
 android/local.properties
+*.jks
+*.keystore
+*.pem
+build/release-key.pem
+build/release-cert.pem
+build/template.apk
+keystore.properties
+android/keystore.properties
+solo-leveling-system.apk

@@ -501,7 +501,7 @@ begin
     from public.players where user_id = v_user;
   if v_last is not null and now() - v_last < interval '700 milliseconds' then
     update public.players set last_seen = now() where user_id = v_user;
-    return json_build_object('ok', true, 'throttled', true);
+    return json_build_object('ok', true, 'throttled', true, 'server_ms', (extract(epoch from now())*1000)::bigint);
   end if;
   if v_prev_lvl is not null then
     if v_lvl > v_prev_lvl + 80 then v_lvl := v_prev_lvl + 80; end if;
@@ -509,8 +509,8 @@ begin
     if v_gems > v_prev_gems + 80 then v_gems := v_prev_gems + 80; end if;
     if v_wins > v_prev_wins + 25 then v_wins := v_prev_wins + 25; end if;
   end if;
-  if v_power > (v_lvl::bigint * 80000 + 2000000) then
-    v_power := v_lvl::bigint * 80000 + 2000000;
+  if v_power > (v_lvl::bigint * 200000 + 50000000) then
+    v_power := v_lvl::bigint * 200000 + 50000000;
   end if;
   update public.players set
     data = p_data,
@@ -531,7 +531,7 @@ begin
     insert into public.players (user_id, username, level, xp, gold, gems, power, wins, losses, kills, rank_pts, hunter_class, data)
     values (v_user, coalesce(v_name, p_data->>'username', 'hunter'), v_lvl, v_xp, v_gold, v_gems, v_power, v_wins, v_losses, v_kills, v_rank, v_class, p_data);
   end if;
-  return json_build_object('ok', true, 'updated_at', now());
+  return json_build_object('ok', true, 'updated_at', now(), 'server_ms', (extract(epoch from now())*1000)::bigint);
 end;
 $$;
 
@@ -793,7 +793,7 @@ begin
     update public.players set losses = losses + 1, last_seen = now()
       where user_id in (v_row.p1, v_row.p2) and user_id is distinct from p_winner;
   end if;
-  return json_build_object('ok', true);
+  return json_build_object('ok', true, 'winner', p_winner, 'result', jsonb_build_object('winner', p_winner, 'scores', coalesce(p_scores, '{}'::jsonb), 'srv', 'ok'));
 end;
 $$;
 
@@ -812,6 +812,58 @@ drop trigger if exists duels_no_fake on public.duels;
 create trigger duels_no_fake
 before update of status, result on public.duels
 for each row execute function public.duel_no_fake_finish();
+
+
+create or replace function public.update_duel(p_id uuid, p_status text default null, p_p2 uuid default null, p_p2name text default null)
+returns json language plpgsql security definer set search_path = public as $$
+declare
+  v_me uuid := public.current_user_id();
+  v_row public.duels%rowtype;
+begin
+  if v_me is null then return json_build_object('error', 'ابتدا وارد شوید'); end if;
+  select * into v_row from public.duels where id = p_id;
+  if not found then return json_build_object('error', 'مبارزه پیدا نشد'); end if;
+  if v_row.p1 is distinct from v_me and v_row.p2 is distinct from v_me and v_row.p2 is not null then
+    return json_build_object('error', 'این مبارزه مال تو نیست');
+  end if;
+  if v_row.status = 'done' then return json_build_object('error', 'مبارزه تمام شده'); end if;
+  if p_status = 'done' then return json_build_object('error', 'پایان فقط از finish_duel'); end if;
+  if p_status is not null and p_status not in ('open','challenged','starting','declined') then
+    return json_build_object('error', 'وضعیت نامعتبر');
+  end if;
+  if v_row.p1 = v_me then
+    update public.duels set
+      p2 = coalesce(p_p2, p2),
+      p2name = coalesce(p_p2name, p2name),
+      status = coalesce(p_status, status)
+    where id = p_id and status is distinct from 'done';
+  elsif v_row.p2 = v_me then
+    if p_status not in ('starting','declined') then
+      return json_build_object('error', 'فقط قبول یا رد');
+    end if;
+    update public.duels set status = p_status where id = p_id and status is distinct from 'done';
+  else
+    return json_build_object('error', 'اجازه نداری');
+  end if;
+  return json_build_object('ok', true);
+end;
+$$;
+
+create or replace function public.chat_set_username()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare v_name text;
+begin
+  if new.user_id is null then raise exception 'شناسه کاربر لازم است'; end if;
+  select username into v_name from public.players where user_id = new.user_id;
+  if v_name is null then raise exception 'حساب پیدا نشد'; end if;
+  new.username := v_name;
+  return new;
+end;
+$$;
+drop trigger if exists chat_username_fill on public.chat_messages;
+create trigger chat_username_fill
+before insert on public.chat_messages
+for each row execute function public.chat_set_username();
 
 -- ============================================================
 --  Grants
@@ -854,17 +906,23 @@ end;
 $$;
 
 grant execute on function public.finish_duel(uuid, uuid, jsonb) to anon, authenticated;
+grant execute on function public.update_duel(uuid, text, uuid, text) to anon, authenticated;
 grant execute on function public.touch_seen() to anon, authenticated;
 grant select, insert on public.players to anon, authenticated;
 revoke update on public.players from anon, authenticated;
 revoke select on public.accounts from anon, authenticated;
 revoke select on public.sessions from anon, authenticated;
 grant select, insert on public.chat_messages to anon, authenticated;
-grant select, insert, update on public.chat_rooms to anon, authenticated;
-grant select, insert, update on public.duels to anon, authenticated;
-grant select, insert, update on public.friends to anon, authenticated;
-grant select, insert, update on public.notifs to anon, authenticated;
-grant select, insert, update on public.ffa_rooms to anon, authenticated;
+grant select, insert on public.chat_rooms to anon, authenticated;
+revoke update on public.chat_rooms from anon, authenticated;
+grant select, insert on public.duels to anon, authenticated;
+revoke update on public.duels from anon, authenticated;
+grant select, insert on public.friends to anon, authenticated;
+revoke update on public.friends from anon, authenticated;
+grant select, insert on public.notifs to anon, authenticated;
+revoke update on public.notifs from anon, authenticated;
+grant select, insert on public.ffa_rooms to anon, authenticated;
+revoke update on public.ffa_rooms from anon, authenticated;
 grant usage, select on all sequences in schema public to anon, authenticated;
 
 -- تازه‌سازی کش PostgREST
