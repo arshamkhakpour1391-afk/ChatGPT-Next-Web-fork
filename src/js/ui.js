@@ -40,6 +40,19 @@ function nameTagHtml(level) {
 }
 
 /* ---------- توست ---------- */
+export function setCloudBanner(kind) {
+  const b = $("cloud-banner");
+  if (!b) return;
+  if (kind === "cloud") {
+    b.classList.add("hidden");
+    return;
+  }
+  b.classList.remove("hidden");
+  b.textContent = kind === "guest"
+    ? "شما آفلاینید — وارد حساب آفلاین (مهمان) شدی. ذخیره روی این دستگاه است."
+    : "شما آفلاینید — حساب آفلاین فعال است. وقتی اینترنت بیاید همه چیز اجباری روی ابر می‌رود.";
+}
+
 export function toast(msg, type = "info", ms = 2600) {
   const wrap = $("toasts");
   if (!wrap) return;
@@ -206,6 +219,9 @@ export function renderTopbar() {
   const earned = titles.filter((t) => st.titles && st.titles[t]);
   $("home-title").textContent = earned[earned.length - 1] || "مبتدی";
   updateNotifDot();
+  if (app.isCloud && app.isCloud()) setCloudBanner("cloud");
+  else if (app.isOffline && app.isOffline()) setCloudBanner("guest");
+  else setCloudBanner("offline");
 }
 
 let comboResetTimer = null;
@@ -2173,14 +2189,10 @@ async function doAuth() {
     cloud.initCloud?.();
     const locals = lsGet("local_accounts") || {};
     let r = { error: "no" };
-    if (authTab === "login" && locals[user] && locals[user].pass === pass) {
-      r = localAuthFallback("login", user, pass);
-    } else {
-      try {
-        r = authTab === "login" ? await cloud.login(user, pass) : await cloud.register(user, pass);
-      } catch (e) {
-        r = { error: "اتصال به سرور برقرار نشد" };
-      }
+    try {
+      r = authTab === "login" ? await cloud.login(user, pass) : await cloud.register(user, pass);
+    } catch (e) {
+      r = { error: "اتصال به سرور برقرار نشد" };
     }
     const errStr = r && r.error ? String(r.error.message || r.error.code || r.error) : "";
     const netFail = !r || (r.error && /اتصال|TIMEOUT|سرور|Failed|fetch|network|offline|no client|PGRST205|نصب نشده|خطای سرور|Could not find|schema|JWT|invalid api|function public/i.test(errStr));
@@ -2197,7 +2209,8 @@ async function doAuth() {
         if (local.error && authTab === "register") local = localAuthFallback("login", user, pass);
         if (local.error) { $("auth-err").textContent = local.error; return; }
         r = local;
-        toast("بدون ابر وارد شدی — بعداً همگام می‌شود", "info", 3200);
+        $("auth-err").textContent = "شما آفلاینید — وارد حساب آفلاین می‌شوی";
+        toast("شما آفلاینید — وارد حساب آفلاین شدی. وقتی اینترنت بیاید همه چیز اجباری روی ابر می‌رود.", "bad", 4800);
       } else {
         $("auth-err").textContent = typeof r.error === "string" ? r.error : (r.error.message || "ورود ناموفق");
         return;

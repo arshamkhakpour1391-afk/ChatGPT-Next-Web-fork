@@ -24,7 +24,7 @@
           <svg class="auth-sword" viewBox="0 0 64 64"><path d="M32 6 L38 26 L56 30 L38 34 L32 58 L26 34 L8 30 L26 26 Z" fill="#7c5cff"/><path d="M32 6 L38 26 L32 30 Z" fill="#c7b8ff"/></svg>
         </div>
         <h1 class="auth-title">Solo System</h1>
-        <p class="auth-sub">سیستم سولو لولینگ — ساختهٔ ارشام · نسخه ۳.۵</p>
+        <p class="auth-sub">سیستم سولو لولینگ — ساختهٔ ارشام · نسخه ۳.۶</p>
       </div>
       <div class="auth-tabs">
         <button class="auth-tab" data-authtab="login">ورود</button>
@@ -51,7 +51,7 @@
         </label>
         <p class="auth-err" id="auth-err"></p>
         <button class="btn btn-primary btn-big" id="auth-submit" type="submit">ساخت حساب و ورود</button>
-        <button class="btn btn-ghost btn-big hidden" id="auth-offline" type="button">بازی آفلاین (بدون حساب)</button>
+        <button class="btn btn-ghost btn-big hidden" id="auth-offline" type="button">شما آفلاینید — ورود به حساب آفلاین</button>
         <p class="auth-note" id="auth-note"></p>
       </form>
     </div>
@@ -59,6 +59,7 @@
 
   <!-- ============ صفحه اصلی ============ -->
   <section id="screen-app" class="screen hidden">
+    <div id="cloud-banner" class="cloud-banner hidden">شما آفلاینید — وارد حساب آفلاین شدی.</div>
     <header class="topbar">
       <div class="topbar-right">
         <div class="hunter-chip" id="hunter-chip">

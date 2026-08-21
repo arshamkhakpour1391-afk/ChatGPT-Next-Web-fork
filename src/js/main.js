@@ -72,8 +72,14 @@ const pushCloud = debounce(async () => {
     hunterClass: packed.hunterClass,
   };
   const r = await cloud.savePlayer(packed, cols);
-  if (r.ok) { lastCloudSync = nowMs(); st.cloudAt = lastCloudSync; }
-  else if (r.error) console.warn("cloud save:", r.error?.message || r.error);
+  if (r.ok) {
+    lastCloudSync = nowMs();
+    st.cloudAt = lastCloudSync;
+    ui.setCloudBanner("cloud");
+  } else if (r.error) {
+    ui.setCloudBanner("offline");
+    ui.toast("شما آفلاینید — ذخیره روی دستگاه ماند تا اینترنت برگردد", "bad", 3600);
+  }
 }, 700);
 
 function save() {
@@ -127,9 +133,16 @@ async function onAuthed(r, passFromForm) {
   saveNow();
   ui.initUI(appObj);
   ui.showApp();
-  startOnlineServices();
+  if (isLocalAcc(account)) {
+    ui.setCloudBanner("offline");
+    ui.toast("شما آفلاینید — وارد حساب آفلاین شدی. اینترنت که بیاید همه چیز اجباری روی ابر می‌رود.", "bad", 4800);
+    upgradeToCloud().then((ok) => { if (ok && st) saveNow(); }).catch(() => {});
+  } else {
+    ui.setCloudBanner("cloud");
+    startOnlineServices();
+    ui.toast(`خوش آمدی، ${uname}! همه چیز روی ابر ذخیره می‌شود.`, "good", 3200);
+  }
   tickAndRender();
-  ui.toast(`خوش آمدی، ${uname}! سیستم منتظر توست.`, "good", 3200);
   sfx.win();
 }
 
@@ -140,14 +153,17 @@ function bootLocal(acc, msg) {
     window.__sls_userId = acc.userId;
     st = loadLocalState(acc.userId) || loadLocalState("guest") || loadLocalState("anon") || newState(acc.username, acc.userId);
     st.username = acc.username || st.username;
-    offlineMode = false;
+    offlineMode = isLocalAcc(acc);
   } else {
-    st = loadLocalState() || newState("", "anon");
+    st = loadLocalState() || newState("مهمان", "guest");
+    offlineMode = true;
   }
   ui.initUI(appObj);
   ui.showApp();
   tickAndRender();
-  if (msg) ui.toast(msg, "info", 4200);
+  ui.setCloudBanner(offlineMode || isLocalAcc(acc) ? (offlineMode ? "guest" : "offline") : "offline");
+  ui.toast(msg || "شما آفلاینید — وارد حساب آفلاین شدی", "bad", 4800);
+  if (acc && acc.pass) upgradeToCloud().then((ok) => { if (ok && st) saveNow(); }).catch(() => {});
 }
 
 async function autoLogin() {
@@ -157,12 +173,11 @@ async function autoLogin() {
     if (!acc || !acc.userId) {
       st = loadLocalState() || newState("", "anon");
       showAuth();
-      ui.toast("برای ذخیرهٔ ابری، ثبت‌نام کن یا وارد شو", "info", 4000);
+      ui.toast("ذخیره اجباری روی ابر است — ثبت‌نام کن یا اگر اینترنت نداری حساب آفلاین بزن", "info", 4200);
       return;
     }
     if (String(acc.token || "").startsWith("local-") || String(acc.userId).startsWith("loc_")) {
-      bootLocal(acc);
-      upgradeToCloud().then((ok) => { if (ok && st) saveNow(); }).catch(() => {});
+      bootLocal(acc, "شما آفلاینید — وارد حساب آفلاین شدی");
       return;
     }
     cloud.setSession(acc.token);
@@ -183,7 +198,7 @@ async function autoLogin() {
     }
     const timedOut = r.error && (r.error.message === "TIMEOUT" || r.error.message === "offline");
     if (timedOut || (r.error && !acc.pass)) {
-      bootLocal(acc, "اتصال ابری برقرار نشد — با دادهٔ ذخیره‌شده ادامه می‌دهی");
+      bootLocal(acc, "شما آفلاینید — وارد حساب آفلاین شدی");
       return;
     }
     if (acc.pass) {
@@ -193,10 +208,10 @@ async function autoLogin() {
         return;
       }
     }
-    bootLocal(acc, "نشست ابری تازه نشد — محلی بازی می‌کنی، بعداً دوباره وارد شو");
+    bootLocal(acc, "شما آفلاینید — وارد حساب آفلاین شدی");
   } catch (e) {
     const acc = lsGet("account");
-    if (acc && acc.userId) bootLocal(acc, "خطا در ورود خودکار — دادهٔ محلی سالم است");
+    if (acc && acc.userId) bootLocal(acc, "شما آفلاینید — وارد حساب آفلاین شدی");
     else {
       st = loadLocalState() || newState("", "anon");
       showAuth();
@@ -221,12 +236,14 @@ function logout() {
 
 function onOfflineMode() {
   offlineMode = true;
-  account = null;
-  st = loadLocalState() || newState("مهمان", "guest");
+  account = { username: "مهمان", pass: "", token: "local-guest", userId: "guest" };
+  st = loadLocalState("guest") || loadLocalState() || newState("مهمان", "guest");
+  st.username = "مهمان";
   ui.initUI(appObj);
   ui.showApp();
   tickAndRender();
-  ui.toast("حالت آفلاین: بازی می‌کنی ولی ابر/لیدربرد/چت غیرفعال است. برای ذخیرهٔ همیشگی ثبت‌نام کن.", "bad", 5000);
+  ui.setCloudBanner("guest");
+  ui.toast("شما آفلاینید — وارد حساب آفلاین (مهمان) شدی. ذخیره فقط روی این دستگاه است تا اینترنت بیاید.", "bad", 5200);
 }
 
 /* ---------- سرویس‌های آنلاین ---------- */
@@ -252,7 +269,10 @@ function startOnlineServices() {
     sfx.msg();
   });
   cloud.on("status", (s) => {
-    if (!s.online) ui.toast("اتصال ابر قطع شد — داده‌ها محلی ذخیره می‌شوند و بعداً همگام می‌شوند", "bad", 4000);
+    if (!s.online) {
+      ui.setCloudBanner("offline");
+      ui.toast("شما آفلاینید — اتصال ابر قطع شد", "bad", 4000);
+    } else ui.setCloudBanner("cloud");
   });
 }
 
@@ -386,6 +406,7 @@ const appObj = {
   saveNow: () => saveNow(),
   isLoggedIn: () => !!account && !offlineMode,
   isCloud: () => !!(account && !offlineMode && !isLocalAcc(account)),
+  isOffline: () => offlineMode,
   lastCloudSync: () => lastCloudSync,
   myUserId: () => account?.userId || null,
   onAuthed,
