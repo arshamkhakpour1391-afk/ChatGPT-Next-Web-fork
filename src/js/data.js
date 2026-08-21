@@ -1,5 +1,6 @@
 /* ================= تولید محتوای بازی (۱۰هزار دانجن، ۱۰۰۰ باس، ۱۰هزار تکنیک، ۱۰هزار وسیله) ================= */
 import { mulberry32, seedOf, pick, range, hashStr } from "./util.js";
+import { texUrl, makeItemStory } from "./gfx.js";
 
 export const RANKS = [
   { key: "E",  name: "رتبهٔ E",  cls: "rank-E",  color: "#c8ccd8", mult: 1 },
@@ -97,7 +98,8 @@ export function dungeonIndex(i) {
     bossEmoji: BOSS_EMOJI[Math.floor(rng() * BOSS_EMOJI.length)],
     story,
     element: ELEMENTS[i % ELEMENTS.length],
-    archetype: archetypeOf(i)
+    archetype: archetypeOf(i),
+    tex: texUrl("dungeon", i)
   };
 }
 function makeDungeonStory(rng, noun, adj, monster, level, tier) {
@@ -141,7 +143,8 @@ export function bossIndex(i) {
     i, level, rank, name, hp, atk, def, gold, xp, essenceChance,
     skills, lore, emoji: BOSS_EMOJI[Math.floor(rng() * BOSS_EMOJI.length)],
     element: ELEMENTS[i % ELEMENTS.length],
-    archetype: archetypeOf(i)
+    archetype: archetypeOf(i),
+    tex: texUrl("boss", i)
   };
 }
 function makeBossSkills(rng, level) {
@@ -270,7 +273,8 @@ export function skillIndex(i) {
     pct, dmgPct,
     passive: type.passive,
     cd: type.passive ? 0 : 6000 + Math.floor(rng() * 8000),
-    req: { t: req.t, n: Math.max(1, Math.floor(req.n)), label: reqLabel }
+    req: { t: req.t, n: Math.max(1, Math.floor(req.n)), label: reqLabel },
+    tex: texUrl("skill", i)
   };
 }
 export function getSkill(i) { return skillIndex(i); }
@@ -332,7 +336,12 @@ export const SHOP_ITEMS = (() => {
   const items = [];
   let id = 1;
   const add = (cat, name, icon, desc, price, effects) => {
-    items.push({ id: id++, cat, name, icon, desc, price, effects: effects || {} });
+    const nid = id++;
+    items.push({
+      id: nid, cat, name, icon, desc, price, effects: effects || {},
+      tex: texUrl(cat === "weapon" ? "weapon" : cat === "armor" ? "armor" : "item", nid),
+      story: `«${name}» از فروشگاه سیستم سولو. ${desc}. اثر واقعی دارد و بعد از خرید در کیف کار می‌کند.`,
+    });
   };
   WEAPONS.forEach((w, idx) => {
     const atk = 8 + idx * 14 + Math.floor(idx * idx * 0.8);
@@ -416,7 +425,10 @@ export function catalogIndex(i) {
     desc = "جعبهٔ شانس کاتالوگ";
     price = { gem: 3 };
   }
-  return { id: CATALOG_BASE + i, cat, name, icon, desc, price, effects, catalog: true, tier };
+  const story = makeItemStory(rng, cat, name, tier, desc);
+  const rarity = ["معمولی", "غیرمعمول", "نادر", "حماسی", "افسانه"][Math.min(4, Math.floor(tier / 2))];
+  const texKind = cat === "weapon" ? "weapon" : cat === "armor" ? "armor" : "item";
+  return { id: CATALOG_BASE + i, cat, name, icon, desc, price, effects, catalog: true, tier, story, rarity, tex: texUrl(texKind, i) };
 }
 export function itemById(id) {
   const n = Number(id);

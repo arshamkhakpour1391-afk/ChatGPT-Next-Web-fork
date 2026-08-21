@@ -38,6 +38,7 @@ export function migrateState(st) {
   if (!st.settings) st.settings = { autoPotion: false, battleSpeed: 1 };
   if (st.settings.autoPotion == null) st.settings.autoPotion = false;
   if (!st.settings.battleSpeed) st.settings.battleSpeed = 1;
+  if (st.avatar == null) st.avatar = "";
   if (!st.shadows) st.shadows = {};
   if (!st.equip) st.equip = { active: [], weapon: null, armor: null, shadows: [], title: null, titleItem: null };
   if (!Array.isArray(st.equip.active)) st.equip.active = [];
@@ -85,6 +86,7 @@ export function newState(username, seedStr) {
     dungeons: {},
     bosses: {},
     settings: { autoPotion: false, battleSpeed: 1 },
+    avatar: "",
     updatedAt: nowMs()
   };
 }

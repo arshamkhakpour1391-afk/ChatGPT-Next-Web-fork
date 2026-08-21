@@ -20,7 +20,9 @@ import {
   SHOP_ITEMS, SHOP_CATS, itemById, itemByName, yearQuestDay, YEAR_DAYS,
   hunterClass, rankOfLevel, missionOf, MISSION_INTERVAL_MS, RANKS, ARCHETYPES,
   shopListForCat, CATALOG_COUNT,
-} from "./data.js";import {
+} from "./data.js";
+import { texUrl, PRESET_AVATARS, readAvatarFile, avatarMarkup } from "./gfx.js";
+import {
   openBattle, hideFight, isFighting, openShooterDuel, shooterRemoteState,
   shooterRemoteBullet, shooterRemotePowerup, shooterRemoteEnd, hideShooter,
   openClickDuel, clickDuelRemote, clickDuelRemoteEnd, hideClickDuel, openFfaArena,
@@ -72,6 +74,18 @@ export function modal({ title, body, actions = [], cls = "", onClose }) {
 }
 export function closeModal() {
   $("modal-wrap").classList.add("hidden");
+}
+function inspectThing(it) {
+  if (!it) return;
+  const tex = it.tex || texUrl(it.cat || "item", it.id || it.i || 0);
+  const story = it.story || it.lore || it.desc || "";
+  modal({
+    title: it.name || "جزئیات",
+    body: `<div class="tex-lg" style="background-image:url('${tex}')"></div>
+      <p class="item-story">${esc(story)}</p>
+      <p>${esc(it.desc || "")}${it.element ? " · عنصر " + esc(it.element) : ""}${it.archetype ? " · " + esc(it.archetype.name) : ""}</p>`,
+    actions: [{ label: "بستن", cb() {} }]
+  });
 }
 $("modal-wrap")?.addEventListener("click", (e) => {
   if (e.target === $("modal-wrap")) closeModal();
@@ -151,7 +165,11 @@ export function renderTopbar() {
   const st = app && app.getSt && app.getSt();
   if (!st) return;
   const hc = hunterClass(st.level);
-  $("avatar-letter").textContent = (st.username || "ش").charAt(0).toUpperCase();
+  const letter = (st.username || "ش").charAt(0).toUpperCase();
+  const av = $("avatar");
+  if (av) av.innerHTML = avatarMarkup(st.avatar, letter);
+  const al = $("avatar-letter");
+  if (al && !st.avatar) al.textContent = letter;
   $("hunter-name").textContent = st.username || "—";
   $("hunter-rank").textContent = hc.name;
   $("hunter-rank").style.color = rankOfLevel(st.level).color;
@@ -647,7 +665,7 @@ export function renderGates() {
     const locked = st.level < d.level;
     const cleared = st.dungeons && st.dungeons[i] && st.dungeons[i].cleared;
     const card = make(`<div class="gate-card" style="${cleared ? "border-color:rgba(46,255,126,.4)" : ""}">
-      <div class="rank-ico ${d.rank.cls}"><b>${d.rank.key}</b><span>سطح ${faNum(d.level)}</span></div>
+      <div class="rank-ico ${d.rank.cls} rank-tex" style="background-image:url('${d.tex || ""}')"><b>${d.rank.key}</b><span>سطح ${faNum(d.level)}</span></div>
       <div class="gate-info">
         <div class="gate-name">${esc(d.name)} ${cleared ? "✓" : ""}</div>
         <div class="gate-sub">${esc(d.monster)} · ${d.archetype ? esc(d.archetype.name) + " · " : ""}${d.element ? esc(d.element) + " · " : ""}${faNum(d.waves)} موج</div>
@@ -658,6 +676,7 @@ export function renderGates() {
       ${cleared && !locked ? `<button class="btn btn-ghost btn-sm" data-sw="${i}">جارو</button>` : ""}
       </div>
     </div>`);
+    card.querySelector(".rank-ico")?.addEventListener("click", () => inspectThing({ name: d.name, story: d.story, tex: d.tex, desc: d.monster, element: d.element, archetype: d.archetype, i: d.i }));
     card.querySelector(".gate-go").addEventListener("click", () => enterDungeon(i, d));
     card.querySelector("[data-sw]")?.addEventListener("click", () => {
       const r = sweepDungeon(app.getSt(), i);
@@ -783,7 +802,7 @@ export function renderBosses() {
     const killed = st.bosses && st.bosses[i] && st.bosses[i].killed;
     const tooStrong = st.level + 15 < b.level;
     const card = make(`<div class="boss-card" style="${killed ? "border-color:rgba(46,255,126,.4)" : ""}">
-      <div class="rank-ico ${b.rank.cls}"><b>${b.rank.key}</b><span>سطح ${faNum(b.level)}</span></div>
+      <div class="rank-ico ${b.rank.cls} rank-tex" style="background-image:url('${b.tex || ""}')"><b>${b.rank.key}</b><span>سطح ${faNum(b.level)}</span></div>
       <div class="boss-info">
         <div class="boss-name">${b.emoji} ${esc(b.name)} ${killed ? "✓" : ""}</div>
         <div class="boss-sub">${b.archetype ? esc(b.archetype.name) + " · " : ""}${b.element ? esc(b.element) + " · " : ""}جان ${fmtNum(b.hp)} · ${esc(b.skills.map((s) => s.name).join("، "))}</div>
@@ -791,6 +810,7 @@ export function renderBosses() {
       </div>
       <button class="btn ${tooStrong ? "btn-ghost" : "btn-red"} btn-sm gate-go" data-b="${i}">${killed ? "دوباره" : "مبارزه!"}</button>
     </div>`);
+    card.querySelector(".rank-ico")?.addEventListener("click", () => inspectThing({ name: b.name, lore: b.lore, tex: b.tex, desc: b.skills.map((s) => s.name).join("، "), element: b.element, archetype: b.archetype, i: b.i }));
     card.querySelector(".gate-go").addEventListener("click", () => fightBoss(i, b));
     box.appendChild(card);
   }
@@ -929,16 +949,20 @@ export function renderShop() {
   if (shopSort === "own") list = list.slice().sort((a, b) => (st.items[b.id] || 0) - (st.items[a.id] || 0));
   list.forEach((it) => {
     const owned = st.items[it.id] || 0;
+    const tex = it.tex || texUrl(it.cat === "weapon" ? "weapon" : it.cat === "armor" ? "armor" : "item", it.id);
+    const rar = it.rarity ? `<span class="rarity r${Math.min(4, it.tier || 0)}">${esc(it.rarity)}</span>` : "";
     const card = make(`<div class="item-card">
-      <div class="item-ico">${it.icon}</div>
-      <div class="item-name">${esc(it.name)}</div>
+      <div class="item-ico tex" style="background-image:url('${tex}')">${it.icon}</div>
+      <div class="item-name">${esc(it.name)} ${rar}</div>
       <div class="item-desc">${esc(it.desc)}</div>
       <div class="item-foot">
         <span class="item-price ${it.price.gem != null ? "gem" : ""}">${it.price.gem != null ? "💎 " + faNum(it.price.gem) : "🪙 " + fmtNum(it.price.gold)}</span>
+        <button class="btn btn-ghost btn-sm" data-info="${it.id}">ℹ</button>
         <button class="btn btn-primary btn-sm item-buy" data-buy="${it.id}">${owned ? "دارید ×" + faNum(owned) : "خرید"}</button>
       </div>
     </div>`);
     card.querySelector("[data-buy]").addEventListener("click", () => buyFromShop(it.id, false));
+    card.querySelector("[data-info]").addEventListener("click", () => inspectThing(it));
     grid.appendChild(card);
   });
 }
@@ -1016,7 +1040,7 @@ function renderSkills(box) {
     if (!sq && !unlocked && !meetsReq(st, sk.req) && i > 12) continue;
     count++;
     const card = make(`<div class="skill-card ${unlocked ? "" : "locked"} ${equipped ? "equipped" : ""}">
-      <div class="skill-ico">${sk.icon}</div>
+      <div class="skill-ico tex" style="background-image:url('${sk.tex || ""}')">${sk.icon}</div>
       <div class="skill-info">
         <div class="skill-name">${esc(sk.name)} <span class="chip ${sk.passive ? "chip-blue" : "chip-purple"}">${sk.passive ? "پسیو" : "اکتیو"}</span> ${equipped ? `<span class="chip chip-green">فعال</span>` : ""}</div>
         <div class="skill-desc">${esc(sk.desc)} ${sk.passive ? "" : `· شارژ ${dur(sk.cd)}`}</div>
@@ -1062,7 +1086,7 @@ function renderItems(box) {
     const fx = it.effects;
     const usable = fx.energy != null || fx.xp != null || fx.gold != null || fx.protect != null || fx.box != null || fx.rerollShop != null || fx.punishShield != null || fx.fullEnergy != null || fx.duelTicket != null || fx.rage != null || fx.haste != null || fx.focus != null || fx.luck != null || fx.def != null || fx.atk != null || fx.vamp != null || fx.regen != null || fx.greed != null || fx.shadow != null || fx.yearBoost != null || fx.chatColor != null || fx.sysBell != null || fx.secretKey != null || fx.statPts != null || fx.shadowFood != null;
     const row = make(`<div class="inv-item">
-      <div class="item-ico">${it.icon}</div>
+      <div class="item-ico tex" style="background-image:url('${it.tex || texUrl("item", it.id)}')">${it.icon}</div>
       <div class="skill-info">
         <div class="skill-name">${esc(it.name)} ×${faNum(count)} ${equippedW || equippedA || equippedT ? `<span class="chip chip-green">مجهر</span>` : ""}</div>
         <div class="skill-desc">${esc(it.desc)}</div>
@@ -1896,7 +1920,7 @@ $("btn-settings").addEventListener("click", () => {
     title: "تنظیمات",
     body: `
       <div class="m-meta" style="justify-content:space-between"><span>وضعیت ابر: <b>${cloudState}</b></span><span>دیتابیس: <b>${cloud.schemaReady() ? "✅ نصب شده" : "❌ نصب نشده"}</b></span></div>
-      <div class="m-meta" style="justify-content:space-between"><span>حساب: <b>${esc(st.username)}</b></span><span>Solo System ۳.۱</span></div>
+      <div class="m-meta" style="justify-content:space-between"><span>حساب: <b>${esc(st.username)}</b></span><span>Solo System ۳.۲</span></div>
       <div class="m-meta"><span>همگام ابر: <b>${app.isCloud && app.isCloud() ? "فعال — مهارت و آمار کامل" : "محلی (وقتی اینترنت باشد می‌رود روی ابر)"}</b></span></div>
       <p style="margin-top:10px">ساختهٔ ارشام — داده‌ها روی ابر و دستگاه می‌مانند.</p>
       <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px">
@@ -2007,6 +2031,69 @@ export function showInstaller() {
 }
 
 /* ---------- ورود / ثبت‌نام ---------- */
+let pendingAvatar = "";
+function paintAuthPreview() {
+  const box = $("auth-avatar-preview");
+  if (!box) return;
+  const letter = (($("auth-user") && $("auth-user").value) || "؟").charAt(0).toUpperCase() || "؟";
+  box.innerHTML = avatarMarkup(pendingAvatar, letter);
+}
+function bindAvatarPick() {
+  const presets = $("auth-presets");
+  if (presets && !presets.children.length) {
+    PRESET_AVATARS.forEach((src, i) => {
+      const b = make(`<button type="button" class="av-preset" data-av="${i}"><img alt="" src="${src}"></button>`);
+      b.addEventListener("click", () => {
+        pendingAvatar = src;
+        [...presets.children].forEach((x) => x.classList.toggle("on", x === b));
+        paintAuthPreview();
+      });
+      presets.appendChild(b);
+    });
+  }
+  $("auth-photo")?.addEventListener("click", () => $("auth-photo-file")?.click());
+  $("auth-photo-file")?.addEventListener("change", async () => {
+    const f = $("auth-photo-file").files && $("auth-photo-file").files[0];
+    if (!f) return;
+    try {
+      pendingAvatar = await readAvatarFile(f);
+      paintAuthPreview();
+      toast("عکس پروفایل آماده شد", "good");
+    } catch (e) { toast("عکس خوانده نشد — یک پروفایل آماده انتخاب کن", "bad"); }
+  });
+  $("auth-user")?.addEventListener("input", () => { if (!pendingAvatar) paintAuthPreview(); });
+}
+bindAvatarPick();
+$("hunter-chip")?.addEventListener("click", () => {
+  const st = app && app.getSt && app.getSt();
+  if (!st) return;
+  const presets = PRESET_AVATARS.map((src, i) => `<button type="button" class="av-preset" data-av="${i}"><img alt="" src="${src}"></button>`).join("");
+  modal({
+    title: "پروفایل شکارچی",
+    body: `<div class="avatar-pick"><div class="avatar avatar-lg" id="chg-av">${avatarMarkup(st.avatar, (st.username || "ش").charAt(0))}</div>
+      <div class="avatar-presets" id="chg-presets">${presets}</div>
+      <button type="button" class="btn btn-ghost btn-sm" id="chg-photo">📷 عکس خودم</button>
+      <input type="file" id="chg-file" accept="image/*" hidden></div>`,
+    actions: [{ label: "بستن", cb() {} }]
+  });
+  const apply = (src) => {
+    st.avatar = src;
+    app.save();
+    renderTopbar();
+    const p = $("chg-av");
+    if (p) p.innerHTML = avatarMarkup(src, (st.username || "ش").charAt(0));
+  };
+  $("chg-presets")?.querySelectorAll(".av-preset").forEach((b) => {
+    b.addEventListener("click", () => apply(PRESET_AVATARS[Number(b.dataset.av)]));
+  });
+  $("chg-photo")?.addEventListener("click", () => $("chg-file")?.click());
+  $("chg-file")?.addEventListener("change", async () => {
+    const f = $("chg-file").files && $("chg-file").files[0];
+    if (!f) return;
+    try { apply(await readAvatarFile(f)); toast("پروفایل عوض شد", "good"); }
+    catch (e) { toast("عکس خوانده نشد", "bad"); }
+  });
+});
 let authTab = "register";
 document.querySelectorAll(".auth-tab").forEach((b) => b.addEventListener("click", () => {
   authTab = b.dataset.authtab;
@@ -2079,6 +2166,11 @@ async function doAuth() {
     }
     if (!r.token) { $("auth-err").textContent = "توکن نیامد — دوباره بزن"; return; }
     await app.onAuthed(r, pass);
+    if (pendingAvatar && app.getSt()) {
+      app.getSt().avatar = pendingAvatar;
+      app.save();
+      renderTopbar();
+    }
   } catch (e) {
     $("auth-err").textContent = "خطای غیرمنتظره — دوباره بزن";
   } finally {

@@ -378,6 +378,26 @@ t("کاتالوگ ۱۰۰هزار وسیله معتبر است", () => {
   const r = buyItem(st, a.id);
   assert.ok(r.ok && st.items[a.id] === 1);
 });
+t("تکسچر ۴K و داستان برای آیتم و باس و دروازه", () => {
+  const a = catalogIndex(42);
+  assert.ok(a.story && a.story.length > 24, "داستان کاتالوگ");
+  assert.ok(a.tex && a.tex.indexOf("image/svg") > 0, "تکسچر کاتالوگ");
+  assert.ok(a.rarity);
+  const b = bossIndex(3);
+  assert.ok(b.tex && b.lore && b.lore.length > 10);
+  const d = dungeonIndex(9);
+  assert.ok(d.tex && d.story && d.story.length > 20);
+  const sk = skillIndex(8);
+  assert.ok(sk.tex && sk.tex.indexOf("svg") > 0);
+  SHOP_ITEMS.slice(0, 8).forEach((it) => {
+    assert.ok(it.tex && it.story, "shop tex " + it.id);
+    assert.ok(verifyItem(it));
+  });
+  [0, 777, 12345, 99999].forEach((i) => {
+    const it = catalogIndex(i);
+    assert.ok(verifyItem(it) && it.story && it.tex);
+  });
+});
 
 console.log(`\n=== نتیجه: ${passed} موفق، ${failed} ناموفق ===`);
 if (failed) process.exit(1);

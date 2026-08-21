@@ -2,6 +2,7 @@
 import { sfx, el, make, faNum, fmt, dur, esc, clamp, nowMs, vibrate, deepClone } from "./util.js";
 import { combatStats, calcDamage, comboMult, battleAtkCd } from "./engine.js";
 import { skillIndex, itemById, hunterClass, elementMult } from "./data.js";
+import { texUrl } from "./gfx.js";
 
 let battle = null;
 let rafId = 0;
@@ -43,7 +44,12 @@ export function openBattle(cfg) {
   };
 
   const hc = hunterClass(st.level);
-  if (el("player-sprite")) el("player-sprite").textContent = CLASS_EMOJI[hc.name] || "🗡️";
+  const ps = el("player-sprite");
+  if (ps) {
+    ps.textContent = CLASS_EMOJI[hc.name] || "🗡️";
+    const av = st.avatar || "";
+    ps.style.backgroundImage = av ? `url("${av}")` : `url("${texUrl("hunter", st.level || 1)}")`;
+  }
   if (el("player-name")) el("player-name").textContent = st.username || "تو";
 
   spawnWave();
@@ -132,6 +138,7 @@ function spawnWave() {
   const spr = el("enemy-sprite");
   if (spr) {
     spr.textContent = emoji;
+    spr.style.backgroundImage = `url("${src.tex || texUrl(isBossWave ? "boss" : "dungeon", src.i || 0)}")`;
     spr.classList.remove("spawn", "lunge", "hit");
     void spr.offsetWidth;
     spr.classList.add("spawn");
@@ -354,7 +361,7 @@ export function playerAttack() {
   const cd = Math.max(220, (b.player.atkCd || 720) / (b.speed || 1));
   if (now < (b.player.lastAtk || 0) + cd) return 0;
   b.player.lastAtk = now;
-  let mult = 1 * b.player.rageMult * (b.player.hasteUntil > now ? 1.25 : 1);
+  let mult = 1 * b.player.rageMult * (b.player.hasteUntil > now ? 1.25 : 1) * comboMult(b.combo);
   if (!b.isDungeon) mult *= (b.cs.slayer || 1);
   const srcEl = b.cfg.src && b.cfg.src.element;
   if (srcEl) mult *= elementMult("سایه", srcEl);
