@@ -45,6 +45,7 @@ export function migrateState(st) {
   if (st.settings.autoPotion == null) st.settings.autoPotion = false;
   if (!st.settings.battleSpeed) st.settings.battleSpeed = 1;
   if (st.avatar == null) st.avatar = "";
+  if (!st.createdAt) st.createdAt = st.updatedAt || nowMs();
   if (!st.shadows) st.shadows = {};
   if (!st.equip) st.equip = { active: [], weapon: null, armor: null, shadows: [], title: null, titleItem: null };
   if (!Array.isArray(st.equip.active)) st.equip.active = [];
@@ -57,7 +58,11 @@ export function migrateState(st) {
 }
 
 /* ---------- منحنی سختی (لول ۶ ≈ ۲۰۰۰ کلیک) ---------- */
-export function xpNeed(level) { return Math.floor(30 * Math.pow(level, 2.35)); }
+export function xpNeed(level) {
+  const lv = Math.max(1, Math.min(LEVEL_CAP, Number(level) || 1));
+  const n = Math.floor(30 * Math.pow(lv, 2.35));
+  return Number.isFinite(n) && n > 0 ? n : 1e12;
+}
 export function maxEnergy(level) { return 20 + level * 2; }
 
 export function newState(username, seedStr) {
@@ -93,6 +98,7 @@ export function newState(username, seedStr) {
     bosses: {},
     settings: { autoPotion: false, battleSpeed: 1 },
     avatar: "",
+    createdAt: nowMs(),
     updatedAt: nowMs()
   };
 }
@@ -919,9 +925,64 @@ export function achievementsOf(st) {
   ];
 }
 
+export function failOverdueMissions(st) {
+  if (!st) return null;
+  const now = nowMs();
+  const bucket = missionBucket(now);
+  const bornBucket = missionBucket(st.createdAt || now);
+  let lastEv = null;
+  const seen = new Set();
+  for (let b = Math.max(1, bucket - 12); b <= bucket; b++) seen.add(b);
+  for (const mid of Object.keys(st.missions || {})) {
+    const [b, s] = String(mid).split(":").map(Number);
+    if (s === 0 && Number.isFinite(b) && b > 0) seen.add(b);
+  }
+  for (const b of seen) {
+    const m = missionOf(st.seed, 0, b);
+    if (!m || !m.mandatory) continue;
+    const rec = st.missions[m.id] || {};
+    if (rec.done || rec.claimed || rec.failed) continue;
+    const overdue = (b < bucket) || (now >= m.deadline);
+    if (!overdue) continue;
+    const tracked = st.missions[m.id] != null;
+    if (!tracked && bornBucket > b) continue;
+    if (!markFailedMission(st, m.id)) continue;
+    lastEv = applyPunishment(st, `ماموریت اجباری انجام نشد: ${m.title}`, {});
+  }
+  return lastEv;
+}
+
+export function punishMissedDaily(st) {
+  if (!st || !st.daily) return null;
+  const today = todayKey();
+  if (!st.daily.date || st.daily.date === today) return null;
+  if (st.daily.punishedFor === st.daily.date) return null;
+  const list = Object.values(st.daily.quests || {});
+  st.daily.punishedFor = st.daily.date;
+  if (!list.length) return null;
+  const incomplete = list.some((q) => q && !q.done && !q.claimed);
+  if (!incomplete) return null;
+  return applyPunishment(st, "ماموریت روزانه انجام نشد", {});
+}
+
 export function tickState(st) {
   const now = nowMs();
   let changed = false;
+  if (st.clockAt && now + 120000 < st.clockAt) {
+    st.clockAt = now;
+    return false;
+  }
+  st.clockAt = now;
+  const dailyEv = punishMissedDaily(st);
+  if (dailyEv) {
+    changed = true;
+    if (!dailyEv.blocked) st.pendingPunish = dailyEv;
+  }
+  const missEv = failOverdueMissions(st);
+  if (missEv) {
+    changed = true;
+    if (!st.pendingPunish && !missEv.blocked) st.pendingPunish = missEv;
+  }
   if (cleanDebuffs(st)) changed = true;
   activeBuffs(st);
   const yr = yearState(st);

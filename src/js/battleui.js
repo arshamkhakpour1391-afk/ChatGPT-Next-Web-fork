@@ -54,9 +54,9 @@ export function openBattle(cfg) {
   if (el("player-name")) el("player-name").textContent = st.username || "تو";
 
   spawnWave();
-  el("screen-fight").classList.remove("hidden");
-  el("screen-app").classList.add("hidden");
-  el("fight-title").textContent = src.name;
+  el("screen-fight")?.classList.remove("hidden");
+  el("screen-app")?.classList.add("hidden");
+  if (el("fight-title")) el("fight-title").textContent = src.name;
   bindFleeOnce();
   renderActions();
   updateHud();
@@ -148,10 +148,10 @@ function spawnWave() {
     void spr.offsetWidth;
     spr.classList.add("spawn");
   }
-  el("enemy-name").textContent = name;
+  if (el("enemy-name")) el("enemy-name").textContent = name;
   const extra = src.element ? ` · ${src.element}` : "";
-  el("fight-wave").textContent = b.isDummy ? "تمرین" : (b.isDungeon ? `موج ${faNum(b.wave)} از ${faNum(b.totalWaves)}${extra}` : (rankLabel(src.rank) + extra));
-  el("enemy-rage").classList.add("hidden");
+  if (el("fight-wave")) el("fight-wave").textContent = b.isDummy ? "تمرین" : (b.isDungeon ? `موج ${faNum(b.wave)} از ${faNum(b.totalWaves)}${extra}` : (rankLabel(src.rank) + extra));
+  el("enemy-rage")?.classList.add("hidden");
   const sq = el("shadow-squad");
   if (sq) {
     sq.innerHTML = "";
@@ -644,14 +644,14 @@ function flashSprite(id, cls) {
   n.classList.add(cls);
 }
 function updateBars() {
-  const b = battle; if (!b) return;
-  const hpPct = Math.max(0, b.player.hp / b.player.maxHp * 100);
-  const ehpPct = Math.max(0, b.enemy.hp / b.enemy.maxHp * 100);
-  el("player-hp-fill").style.width = hpPct + "%";
-  el("player-hp-txt").textContent = `${faNum(Math.max(0, Math.floor(b.player.hp)))} / ${faNum(b.player.maxHp)}`;
-  el("player-mp-fill").style.width = b.player.mp + "%";
-  el("enemy-hp-fill").style.width = ehpPct + "%";
-  el("enemy-hp-txt").textContent = `${faNum(Math.max(0, Math.floor(b.enemy.hp)))} / ${faNum(b.enemy.maxHp)}`;
+  const b = battle; if (!b || !b.enemy || !b.player) return;
+  const hpPct = Math.max(0, b.player.hp / Math.max(1, b.player.maxHp) * 100);
+  const ehpPct = Math.max(0, b.enemy.hp / Math.max(1, b.enemy.maxHp) * 100);
+  if (el("player-hp-fill")) el("player-hp-fill").style.width = hpPct + "%";
+  if (el("player-hp-txt")) el("player-hp-txt").textContent = `${faNum(Math.max(0, Math.floor(b.player.hp)))} / ${faNum(b.player.maxHp)}`;
+  if (el("player-mp-fill")) el("player-mp-fill").style.width = b.player.mp + "%";
+  if (el("enemy-hp-fill")) el("enemy-hp-fill").style.width = ehpPct + "%";
+  if (el("enemy-hp-txt")) el("enemy-hp-txt").textContent = `${faNum(Math.max(0, Math.floor(b.enemy.hp)))} / ${faNum(b.enemy.maxHp)}`;
 }
 function addLog(txt, cls) {
   const b = battle; if (!b) return;
@@ -870,10 +870,11 @@ export function openShooterDuel(cfg) {
     oppDmg: 7 + Math.min(30, Math.floor(cfg.opp.power / 120)),
     joy: { x: 0, y: 0 }, mouseAim: null, keys: {},
   };
-  el("screen-shooter").classList.remove("hidden");
-  el("screen-app").classList.add("hidden");
-  el("shooter-vs").textContent = `${cfg.me.name} در برابر ${cfg.opp.name}`;
+  el("screen-shooter")?.classList.remove("hidden");
+  el("screen-app")?.classList.add("hidden");
+  if (el("shooter-vs")) el("shooter-vs").textContent = `${cfg.me.name} در برابر ${cfg.opp.name}`;
   const cv = el("duel-canvas");
+  if (!cv) return;
   cv.width = 800; cv.height = 450;
 
   setupControls();
@@ -902,6 +903,7 @@ export function openShooterDuel(cfg) {
 
 function setupControls() {
   const cv = el("duel-canvas");
+  if (!cv || !shooter) return;
   // کیبورد
   window.addEventListener("keydown", shKeyDown);
   window.addEventListener("keyup", shKeyUp);
@@ -914,6 +916,7 @@ function setupControls() {
   const zone = el("joystick-zone");
   const knob = el("joystick-knob");
   let jid = null;
+  if (!zone || !knob) return;
   zone.addEventListener("touchstart", (e) => {
     e.preventDefault();
     jid = e.changedTouches[0].identifier;
@@ -1052,7 +1055,7 @@ function step() {
 
   // تایمر
   s.time -= 0.016;
-  el("shooter-time").textContent = faNum(Math.max(0, Math.ceil(s.time)));
+  if (el("shooter-time")) el("shooter-time").textContent = faNum(Math.max(0, Math.ceil(s.time)));
   if (s.time <= 0) {
     endShooter(s.me.hp >= s.opp.hp ? "win" : "lose");
     return;
@@ -1104,7 +1107,9 @@ function spawnBullet(s, owner) {
 function draw() {
   const s = shooter; if (!s) return;
   const cv = el("duel-canvas");
+  if (!cv || typeof cv.getContext !== "function") return;
   const g = cv.getContext("2d");
+  if (!g) return;
   g.clearRect(0, 0, 800, 450);
   // شبکه
   g.strokeStyle = "rgba(124,92,255,.08)";
@@ -1207,24 +1212,30 @@ export function openClickDuel(cfg) {
     cfg, // {me, opp, duelId, send, onEnd}
     myClicks: 0, oppClicks: 0, time: 30, over: false, interval: null, sendTimer: null
   };
-  el("screen-shooter").classList.remove("hidden");
-  el("screen-app").classList.add("hidden");
-  el("shooter-vs").textContent = `${cfg.me.name} ⚔️ ${cfg.opp.name} — هر کی بیشتر بزند!`;
-  el("duel-canvas").classList.add("hidden");
-  el("shooter-controls").classList.add("hidden");
-  el("shooter-hp").classList.add("hidden");
+  el("screen-shooter")?.classList.remove("hidden");
+  el("screen-app")?.classList.add("hidden");
+  if (el("shooter-vs")) el("shooter-vs").textContent = `${cfg.me.name} ⚔️ ${cfg.opp.name} — هر کی بیشتر بزند!`;
+  el("duel-canvas")?.classList.add("hidden");
+  el("shooter-controls")?.classList.add("hidden");
+  el("shooter-hp")?.classList.add("hidden");
   const top = el("shooter-top");
-  top.insertAdjacentHTML("beforeend", `<div id="click-duel-ui" style="flex:1;text-align:center;padding:40px 10px">
-    <div style="font-size:13px;color:#9aa3bd;margin-bottom:14px">دکadient(circle at 35% 30%,#3a4a8a,#151b38 70%);border:2px solid rgba(124,92,255,.6);box-shadow:0 0 34px rgba(124,92,255,.4)">👊</button>
+  if (!top) return;
+  const old = el("click-duel-ui");
+  if (old) old.remove();
+  const ui = make(`<div id="click-duel-ui" style="flex:1;text-align:center;padding:40px 10px">
+    <div style="font-size:13px;color:#9aa3bd;margin-bottom:14px">دکمهٔ بزرگ را بزن! سی ثانیه — سریع‌تر از حریف</div>
+    <button type="button" id="click-duel-btn" style="width:180px;height:180px;border-radius:50%;font-size:44px;font-weight:900;background:radial-gradient(circle at 35% 30%,#3a4a8a,#151b38 70%);border:2px solid rgba(124,92,255,.6);box-shadow:0 0 34px rgba(124,92,255,.4);color:#fff">👊</button>
     <div style="display:flex;justify-content:center;gap:34px;margin-top:18px;font-weight:900">
       <span style="color:#6fa8ff">تو: <b id="cd-my">۰</b></span>
       <span style="color:#ff8099">${esc(cfg.opp.name)}: <b id="cd-opp">۰</b></span>
     </div>
   </div>`);
-  el("click-duel-btn").addEventListener("pointerdown", () => {
+  top.appendChild(ui);
+  const btn = el("click-duel-btn");
+  if (btn) btn.addEventListener("pointerdown", () => {
     if (!clickDuel || clickDuel.over) return;
     clickDuel.myClicks++;
-    el("cd-my").textContent = faNum(clickDuel.myClicks);
+    if (el("cd-my")) el("cd-my").textContent = faNum(clickDuel.myClicks);
     sfx.click(); vibrate(10);
   });
   clickDuel.interval = setInterval(() => {
@@ -1264,11 +1275,11 @@ export function clickDuelRemoteEnd(payload) {
   setTimeout(() => hideClickDuel(), 2400);
 }
 export function hideClickDuel() {
-  el("screen-shooter").classList.add("hidden");
-  el("screen-app").classList.remove("hidden");
-  el("duel-canvas").classList.remove("hidden");
-  el("shooter-controls").classList.remove("hidden");
-  el("shooter-hp").classList.remove("hidden");
+  el("screen-shooter")?.classList.add("hidden");
+  el("screen-app")?.classList.remove("hidden");
+  el("duel-canvas")?.classList.remove("hidden");
+  el("shooter-controls")?.classList.remove("hidden");
+  el("shooter-hp")?.classList.remove("hidden");
   const ui = el("click-duel-ui");
   if (ui) ui.remove();
   if (clickDuel) { clearInterval(clickDuel.interval); clearInterval(clickDuel.sendTimer); }

@@ -319,7 +319,7 @@ function tickAndRender() {
   if (st.pendingPunish) {
     const ev = st.pendingPunish;
     st.pendingPunish = null;
-    ui.showPunishmentModal(ev, "مسیر سالانهٔ ناقص");
+    ui.showPunishmentModal(ev, ev.reason || "مجازات سیستم");
   }
   if (changed) save();
 }
@@ -427,6 +427,18 @@ window.__slsShooterDemo = () => {
       me: { id: "me", name: st.username || "تو", level: st.level, power: computePower(st) },
       opp: { id: "opp", name: "رقیب", level: Math.max(1, st.level), power: computePower(st) },
       isHost: true, localTest: true,
+      send: () => {},
+      onEnd: () => {}
+    });
+  });
+};
+window.__slsClickDuel = () => {
+  import("./battleui.js").then((B) => {
+    B.openClickDuel({
+      duelId: "demo-click",
+      me: { id: "me", name: st.username || "تو", level: st.level || 1, power: computePower(st) },
+      opp: { id: "opp", name: "رقیب", level: 1, power: 10 },
+      isHost: true,
       send: () => {},
       onEnd: () => {}
     });

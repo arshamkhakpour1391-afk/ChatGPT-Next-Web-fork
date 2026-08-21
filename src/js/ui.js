@@ -633,7 +633,7 @@ function paintSort(id, opts, cur, fn) {
 }
 export function renderGates() {
   const st = app.getSt();
-  const filters = ["all", "E", "D", "C", "B", "A", "S", "SS", "N", "M"];
+  const filters = ["all", "E", "D", "C", "B", "A", "S", "SS", "N", "M", "M+", "Ω", "Z", "X"];
   if (!$("gate-filters").children.length) {
     filters.forEach((f) => {
       const b = make(`<button class="g-filter ${f === gateFilter ? "active" : ""}" data-gf="${f}">${f === "all" ? "همه" : f}</button>`);
@@ -669,7 +669,7 @@ export function renderGates() {
   box.innerHTML = "";
   let shown = 0, total = 0;
   const match = (d) => {
-    if (gateFilter !== "all" && d.rank.key !== gateFilter) return false;
+    if (gateFilter !== "all" && d.rank && d.rank.key !== gateFilter) return false;
     if (gateArch !== "all" && d.archetype && d.archetype.key !== gateArch) return false;
     if (q && !(`${d.name} ${d.monster} ${d.archetype?.name || ""} ${d.element || ""}`).includes(q)) return false;
     return true;
@@ -771,7 +771,7 @@ let bossArch = "all";
 let bossShown = 30;
 let bossSort = "level";
 export function renderBosses() {
-  const filters = ["all", "E", "D", "C", "B", "A", "S", "SS", "N", "M"];
+  const filters = ["all", "E", "D", "C", "B", "A", "S", "SS", "N", "M", "M+", "Ω", "Z", "X"];
   if (!$("battle-filters").children.length) {
     filters.forEach((f) => {
       const b = make(`<button class="g-filter ${f === bossFilter ? "active" : ""}" data-bf="${f}">${f === "all" ? "همه" : f}</button>`);
@@ -808,7 +808,7 @@ export function renderBosses() {
   box.innerHTML = "";
   let shown = 0;
   const match = (b) => {
-    if (bossFilter !== "all" && b.rank.key !== bossFilter) return false;
+    if (bossFilter !== "all" && b.rank && b.rank.key !== bossFilter) return false;
     if (bossArch !== "all" && b.archetype && b.archetype.key !== bossArch) return false;
     if (q && !(`${b.name} ${b.archetype?.name || ""} ${b.element || ""}`).includes(q)) return false;
     return true;
@@ -1971,7 +1971,7 @@ $("btn-settings").addEventListener("click", () => {
     title: "تنظیمات",
     body: `
       <div class="m-meta" style="justify-content:space-between"><span>وضعیت ابر: <b>${cloudState}</b></span><span>دیتابیس: <b>${cloud.schemaReady() ? "✅ نصب شده" : "❌ نصب نشده"}</b></span></div>
-      <div class="m-meta" style="justify-content:space-between"><span>حساب: <b>${esc(st.username)}</b></span><span>سیستم سولو ۳.۵</span></div>
+      <div class="m-meta" style="justify-content:space-between"><span>حساب: <b>${esc(st.username)}</b></span><span>سیستم سولو ۳.۷</span></div>
       <div class="m-meta"><span>همگام ابر: <b>${app.isCloud && app.isCloud() ? "فعال — مهارت و آمار کامل" : "محلی (وقتی اینترنت باشد می‌رود روی ابر)"}</b></span></div>
       <p style="margin-top:10px">ساختهٔ ارشام — داده‌ها روی ابر و دستگاه می‌مانند.</p>
       <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px">

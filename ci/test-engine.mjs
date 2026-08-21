@@ -8,8 +8,9 @@ import {
   dailyQuests, claimDailyQuest, applyPunishment, activeDebuffs, tickState, yearState,
   claimYearDay, currentPicks, takePick, addRewardPick, missionBucket, calcDamage, newShadow, dailyDeals,
   claimDailyLogin, unlockTitles, addRankPts, regenEnergy, addBuff, activeBuffs, autoEquipBest, claimAllReady, dailyFeatured, achievementsOf,
-  spendStat, upgradeShadow, fuseShadows, sweepDungeon, markFailedMission, comboMult, battleAtkCd, energyCap, migrateState, featuredMult, firstClearMult, packCloudState
+  spendStat, upgradeShadow, fuseShadows, sweepDungeon, markFailedMission, comboMult, battleAtkCd, energyCap, migrateState, featuredMult, firstClearMult, packCloudState, failOverdueMissions, punishMissedDaily
 } from "../src/js/engine.js";
+import { texUrl } from "../src/js/gfx.js";
 import {
   dungeonIndex, bossIndex, skillIndex, DUNGEON_COUNT, BOSS_COUNT, SKILL_COUNT,
   SHOP_ITEMS, SHOP_CATS, itemById, itemByName, yearQuestDay, YEAR_DAYS, missionOf,
@@ -142,14 +143,15 @@ t("سایه: استخراج و تخصیص حداکثر ۳", () => {
   }
   assert.equal(st.equip.shadows.length, 3, "حداکثر ۳ سایه");
 });
-t("محتوای تولیدی: ۱۰هزار دانجن، ۱۰۰۰ باس، ۱۰هزار تکنیک، ۱۰۰+ آیتم", () => {
+t("محتوای تولیدی: ۱۰هزار دانجن، ۱۰هزار باس، ۱۰هزار تکنیک، ۱۰۰+ آیتم", () => {
   assert.equal(DUNGEON_COUNT, 10000);
-  assert.equal(BOSS_COUNT, 1000);
+  assert.equal(BOSS_COUNT, 10000);
   assert.equal(SKILL_COUNT, 10000);
   assert.ok(SHOP_ITEMS.length >= 100, "آیتم‌ها: " + SHOP_ITEMS.length);
-  assert.equal(dungeonIndex(9999).level, 1000, "دانجن آخر = سطح ۱۰۰۰");
+  assert.equal(dungeonIndex(9999).level, 10000, "دانجن آخر = سطح ۱۰۰۰۰");
   assert.ok(dungeonIndex(9999).name.includes("پادشاه سایه"));
   assert.equal(bossIndex(999).level, 1000);
+  assert.equal(bossIndex(9999).level, 10000);
   // قطعی بودن
   assert.equal(dungeonIndex(123).name, dungeonIndex(123).name);
   assert.equal(bossIndex(77).hp, bossIndex(77).hp);
@@ -426,6 +428,41 @@ t("اسکن عمیق کاتالوگ ۱۰۰هزار: داستان تکسچر اث
     n++;
   }
   assert.ok(n > 1000);
+});
+
+t("مجازات ماموریت روزانه بدون UI", () => {
+  const st = newState("t", "s");
+  st.gold = 2000;
+  st.daily.date = "2020-01-01";
+  st.daily.quests = { q1: { id: "dq_clicks", type: "clicks", n: 10, prog: 0, done: false, claimed: false } };
+  const ev = punishMissedDaily(st);
+  assert.ok(ev && (ev.goldLoss > 0 || ev.blocked));
+  assert.equal(st.daily.punishedFor, "2020-01-01");
+  assert.equal(punishMissedDaily(st), null);
+});
+
+t("ماموریت اجباری بدون UI مجازات می‌شود", () => {
+  const st = newState("t", "s");
+  st.gold = 2000;
+  const bucket = missionBucket(Date.now()) - 3;
+  const m = missionOf(st.seed, 0, bucket);
+  st.missions[m.id] = { prog: 0 };
+  const ev = failOverdueMissions(st);
+  assert.ok(st.missions[m.id].failed);
+  assert.ok(ev && (ev.goldLoss > 0 || ev.blocked));
+  const again = failOverdueMissions(st);
+  assert.equal(again, null);
+});
+
+t("تکسچر کش می‌شود و XP سقف محدود است", () => {
+  const a = texUrl("item", 7);
+  const b = texUrl("item", 7);
+  assert.equal(a, b);
+  assert.ok(a.indexOf("svg") > 0);
+  const need = xpNeed(10000);
+  assert.ok(Number.isFinite(need) && need > 0);
+  assert.ok(xpNeed(LEVEL_CAP + 50) === xpNeed(LEVEL_CAP));
+  assert.ok(skillIndex(8000).req.n > 50, "مهارت سطح بالا باید شرط سنگین داشته باشد");
 });
 
 console.log(`\n=== نتیجه: ${passed} موفق، ${failed} ناموفق ===`);

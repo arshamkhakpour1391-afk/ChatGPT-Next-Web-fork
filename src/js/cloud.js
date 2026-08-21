@@ -112,21 +112,9 @@ export async function savePlayer(state, cols) {
       emit("status", { online: true });
       return { ok: true };
     }
-    const { error } = await withTimeout(
-      sb.from("players").upsert({
-        user_id: cols.userId,
-        username: cols.username,
-        level: cols.level, xp: cols.xp, gold: cols.gold, gems: cols.gems,
-        power: cols.power, wins: cols.wins, losses: cols.losses, kills: cols.kills,
-        rank_pts: cols.rankPts, hunter_class: cols.hunterClass,
-        data: packed, updated_at: new Date().toISOString(), last_seen: new Date().toISOString()
-      }, { onConflict: "user_id" }),
-      15000
-    );
-    online = !error;
-    if (error) { emit("status", { online: false }); return { ok: false, error }; }
-    emit("status", { online: true });
-    return { ok: true };
+    online = false;
+    emit("status", { online: false });
+    return { ok: false, error: (rpc && (rpc.error || rpc.data?.error)) || "save_full_state" };
   } catch (e) {
     online = false;
     emit("status", { online: false });
@@ -156,7 +144,7 @@ export async function loadPlayer(userId) {
 export async function touchSeen(userId) {
   if (!sb) return;
   try {
-    await withTimeout(sb.from("players").update({ last_seen: new Date().toISOString() }).eq("user_id", userId), 6000);
+    await withTimeout(sb.rpc("touch_seen"), 6000);
   } catch (e) {}
 }
 
@@ -373,9 +361,21 @@ export async function createDuel(p1, p1name, mode) {
 }
 export async function updateDuel(id, patch) {
   try {
+    if (patch && patch.status === "done") {
+      return finishDuel(id, patch.result?.winner, patch.result?.scores || patch.result || {});
+    }
     const { error } = await withTimeout(sb.from("duels").update(patch).eq("id", id));
     if (error) return { error };
     return { ok: true };
+  } catch (e) { return { error: e }; }
+}
+export async function finishDuel(id, winner, scores) {
+  try {
+    const { data, error } = await withTimeout(sb.rpc("finish_duel", { p_id: id, p_winner: winner, p_scores: scores || {} }));
+    if (error) return { error: friendlyError(error) };
+    const out = unwrapRpc(data);
+    if (out && out.error) return { error: out.error };
+    return out || { ok: true };
   } catch (e) { return { error: e }; }
 }
 export async function openDuels() {

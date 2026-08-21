@@ -6,6 +6,7 @@
 
 -- اجازهٔ ارجاع توابع به جدول‌ها (محافظ اضافه)
 set check_function_bodies = off;
+create extension if not exists pgcrypto;
 
 -- ============================================================
 --  جدول‌ها
@@ -142,7 +143,7 @@ begin
   end if;
 
   insert into public.accounts (username, passhash)
-  values (p_username, encode(sha256(convert_to(p_pass || '::' || p_username, 'UTF8')), 'hex'))
+  values (p_username, crypt(p_pass, gen_salt('bf', 10)))
   returning id into v_id;
 
   insert into public.players (user_id, username) values (v_id, p_username);
@@ -168,14 +169,26 @@ returns json language plpgsql security definer set search_path = public as $$
 declare
   v_id uuid;
   v_token text;
+  v_hash text;
+  v_legacy text;
 begin
   p_username := trim(lower(p_username));
-  select id into v_id from public.accounts
-  where username = p_username
-    and passhash = encode(sha256(convert_to(p_pass || '::' || p_username, 'UTF8')), 'hex');
-
+  if p_username is null or p_pass is null then
+    return json_build_object('error', 'نام کاربری یا رمز عبور اشتباه است');
+  end if;
+  select id, passhash into v_id, v_hash from public.accounts where username = p_username;
   if v_id is null then
     return json_build_object('error', 'نام کاربری یا رمز عبور اشتباه است');
+  end if;
+  v_legacy := encode(sha256(convert_to(p_pass || '::' || p_username, 'UTF8')), 'hex');
+  if v_hash like '$2%' then
+    if crypt(p_pass, v_hash) is distinct from v_hash then
+      return json_build_object('error', 'نام کاربری یا رمز عبور اشتباه است');
+    end if;
+  elsif v_hash is distinct from v_legacy then
+    return json_build_object('error', 'نام کاربری یا رمز عبور اشتباه است');
+  else
+    update public.accounts set passhash = crypt(p_pass, gen_salt('bf', 10)) where id = v_id;
   end if;
 
   v_token := replace(gen_random_uuid()::text, '-', '') || md5(random()::text);
@@ -460,6 +473,12 @@ declare
   v_rank bigint;
   v_class text;
   v_name text;
+  v_prev_lvl int;
+  v_prev_gold bigint;
+  v_prev_gems int;
+  v_prev_wins int;
+  v_prev_power bigint;
+  v_last timestamptz;
 begin
   if v_user is null then
     return json_build_object('error', 'ابتدا وارد شوید');
@@ -467,17 +486,32 @@ begin
   if p_data is null or jsonb_typeof(p_data) <> 'object' then
     return json_build_object('error', 'داده نامعتبر است');
   end if;
-  v_lvl := greatest(1, coalesce(nullif(p_data->>'level','')::int, 1));
-  v_xp := greatest(0, coalesce(nullif(p_data->>'xp','')::bigint, 0));
-  v_gold := greatest(0, coalesce(nullif(p_data->>'gold','')::bigint, 0));
-  v_gems := greatest(0, coalesce(nullif(p_data->>'gems','')::int, 0));
-  v_power := greatest(0, coalesce(nullif(p_data->>'power','')::bigint, 0));
-  v_wins := greatest(0, coalesce(nullif((p_data->'stats'->>'wins'),'')::int, 0));
-  v_losses := greatest(0, coalesce(nullif((p_data->'stats'->>'losses'),'')::int, 0));
-  v_kills := greatest(0, coalesce(nullif((p_data->'stats'->>'kills'),'')::bigint, 0));
-  v_rank := greatest(0, coalesce(nullif(p_data->>'rank_pts','')::bigint, 1000));
-  v_class := coalesce(p_data->>'hunterClass', 'E');
-  select username into v_name from public.players where user_id = v_user;
+  v_lvl := least(10000, greatest(1, coalesce(nullif(p_data->>'level','')::int, 1)));
+  v_xp := least(1000000000000::bigint, greatest(0, coalesce(nullif(p_data->>'xp','')::bigint, 0)));
+  v_gold := least(1000000000000::bigint, greatest(0, coalesce(nullif(p_data->>'gold','')::bigint, 0)));
+  v_gems := least(1000000, greatest(0, coalesce(nullif(p_data->>'gems','')::int, 0)));
+  v_power := least(500000000000::bigint, greatest(0, coalesce(nullif(p_data->>'power','')::bigint, 0)));
+  v_wins := least(1000000, greatest(0, coalesce(nullif((p_data->'stats'->>'wins'),'')::int, 0)));
+  v_losses := least(1000000, greatest(0, coalesce(nullif((p_data->'stats'->>'losses'),'')::int, 0)));
+  v_kills := least(1000000000::bigint, greatest(0, coalesce(nullif((p_data->'stats'->>'kills'),'')::bigint, 0)));
+  v_rank := least(1000000000::bigint, greatest(0, coalesce(nullif(p_data->>'rank_pts','')::bigint, 1000)));
+  v_class := left(coalesce(p_data->>'hunterClass', 'E'), 40);
+  select username, level, gold, gems, wins, power, last_seen
+    into v_name, v_prev_lvl, v_prev_gold, v_prev_gems, v_prev_wins, v_prev_power, v_last
+    from public.players where user_id = v_user;
+  if v_last is not null and now() - v_last < interval '700 milliseconds' then
+    update public.players set last_seen = now() where user_id = v_user;
+    return json_build_object('ok', true, 'throttled', true);
+  end if;
+  if v_prev_lvl is not null then
+    if v_lvl > v_prev_lvl + 80 then v_lvl := v_prev_lvl + 80; end if;
+    if v_gold > v_prev_gold + 50000000 then v_gold := v_prev_gold + 50000000; end if;
+    if v_gems > v_prev_gems + 80 then v_gems := v_prev_gems + 80; end if;
+    if v_wins > v_prev_wins + 25 then v_wins := v_prev_wins + 25; end if;
+  end if;
+  if v_power > (v_lvl::bigint * 80000 + 2000000) then
+    v_power := v_lvl::bigint * 80000 + 2000000;
+  end if;
   update public.players set
     data = p_data,
     level = v_lvl,
@@ -581,7 +615,8 @@ drop policy if exists ffa_ins on public.ffa_rooms;
 create policy ffa_ins on public.ffa_rooms for insert to anon, authenticated
   with check (owner = public.current_user_id());
 drop policy if exists ffa_upd on public.ffa_rooms;
-create policy ffa_upd on public.ffa_rooms for update to anon, authenticated using (true);
+create policy ffa_upd on public.ffa_rooms for update to anon, authenticated
+  using (owner = public.current_user_id() or members @> jsonb_build_array(public.current_user_id()));
 
 create or replace function public.push_notif(p_user uuid, p_kind text, p_title text, p_body text, p_payload jsonb default '{}'::jsonb)
 returns void language plpgsql security definer set search_path = public as $$
@@ -725,6 +760,59 @@ begin
 exception when duplicate_object then null;
 end $$;
 
+
+create or replace function public.finish_duel(p_id uuid, p_winner uuid, p_scores jsonb default '{}'::jsonb)
+returns json language plpgsql security definer set search_path = public as $$
+declare
+  v_me uuid := public.current_user_id();
+  v_row public.duels%rowtype;
+begin
+  if v_me is null then return json_build_object('error', 'ابتدا وارد شوید'); end if;
+  if p_id is null then return json_build_object('error', 'شناسه نامعتبر'); end if;
+  select * into v_row from public.duels where id = p_id;
+  if not found then return json_build_object('error', 'مبارزه پیدا نشد'); end if;
+  if v_row.p1 is distinct from v_me and v_row.p2 is distinct from v_me then
+    return json_build_object('error', 'این مبارزه مال تو نیست');
+  end if;
+  if v_row.status = 'done' then
+    return json_build_object('ok', true, 'already', true, 'result', v_row.result);
+  end if;
+  if v_row.status not in ('starting', 'challenged', 'open') then
+    return json_build_object('error', 'وضعیت مبارزه قابل پایان نیست');
+  end if;
+  if p_winner is not null and p_winner is distinct from v_row.p1 and p_winner is distinct from v_row.p2 then
+    return json_build_object('error', 'برنده نامعتبر است');
+  end if;
+  perform set_config('app.finish_duel', '1', true);
+  update public.duels set
+    status = 'done',
+    result = jsonb_build_object('winner', p_winner, 'scores', coalesce(p_scores, '{}'::jsonb), 'srv', 'ok', 'finishedAt', now())
+  where id = p_id and status is distinct from 'done';
+  if p_winner is not null then
+    update public.players set wins = wins + 1, last_seen = now() where user_id = p_winner;
+    update public.players set losses = losses + 1, last_seen = now()
+      where user_id in (v_row.p1, v_row.p2) and user_id is distinct from p_winner;
+  end if;
+  return json_build_object('ok', true);
+end;
+$$;
+
+create or replace function public.duel_no_fake_finish()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  if new.status = 'done' and old.status is distinct from 'done' then
+    if current_setting('app.finish_duel', true) is distinct from '1' then
+      raise exception 'نتیجه دوئل فقط از سرور ثبت می‌شود';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists duels_no_fake on public.duels;
+create trigger duels_no_fake
+before update of status, result on public.duels
+for each row execute function public.duel_no_fake_finish();
+
 -- ============================================================
 --  Grants
 -- ============================================================
@@ -752,9 +840,25 @@ grant execute on function public.ffa_create(text) to anon, authenticated;
 grant execute on function public.ffa_join(text) to anon, authenticated;
 grant execute on function public.ffa_invite(text, text) to anon, authenticated;
 grant execute on function public.ffa_list() to anon, authenticated;
-grant select on public.accounts to anon, authenticated;
-grant select on public.sessions to anon, authenticated;
-grant select, insert, update on public.players to anon, authenticated;
+create or replace function public.touch_seen()
+returns json language plpgsql security definer set search_path = public as $$
+declare
+  v_user uuid := public.current_user_id();
+begin
+  if v_user is null then
+    return json_build_object('error', 'ابتدا وارد شوید');
+  end if;
+  update public.players set last_seen = now() where user_id = v_user;
+  return json_build_object('ok', true);
+end;
+$$;
+
+grant execute on function public.finish_duel(uuid, uuid, jsonb) to anon, authenticated;
+grant execute on function public.touch_seen() to anon, authenticated;
+grant select, insert on public.players to anon, authenticated;
+revoke update on public.players from anon, authenticated;
+revoke select on public.accounts from anon, authenticated;
+revoke select on public.sessions from anon, authenticated;
 grant select, insert on public.chat_messages to anon, authenticated;
 grant select, insert, update on public.chat_rooms to anon, authenticated;
 grant select, insert, update on public.duels to anon, authenticated;

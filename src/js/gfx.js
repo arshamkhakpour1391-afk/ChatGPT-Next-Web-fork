@@ -7,7 +7,11 @@ function hsl(h, s, l, a) {
   return a == null ? `hsl(${h % 360},${s}%,${l}%)` : `hsla(${h % 360},${s}%,${l}%,${a})`;
 }
 
+const TEX_CACHE = new Map();
 export function texUrl(kind, i, extra) {
+  const key = String(kind) + ":" + (i | 0) + ":" + (extra || 0);
+  const hit = TEX_CACHE.get(key);
+  if (hit) return hit;
   const rng = mulberry32(seedOf("tex4k", kind, i, extra || 0));
   const h1 = Math.floor(rng() * 360);
   const h2 = (h1 + 28 + Math.floor(rng() * 70)) % 360;
@@ -39,7 +43,13 @@ export function texUrl(kind, i, extra) {
     shapes.push(`<circle cx="2390" cy="1500" r="140" fill="${hsl(h1, 90, 62, 0.85)}"/>`);
   }
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4096 4096" width="4096" height="4096"><defs>${parts.join("")}</defs><rect width="4096" height="4096" fill="url(#a)"/>${shapes.join("")}<rect width="4096" height="4096" fill="url(#b)"/><rect x="48" y="48" width="4000" height="4000" fill="none" stroke="${hsl(h2, 80, 72, 0.4)}" stroke-width="40"/></svg>`;
-  return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  if (TEX_CACHE.size > 480) {
+    const first = TEX_CACHE.keys().next().value;
+    TEX_CACHE.delete(first);
+  }
+  TEX_CACHE.set(key, url);
+  return url;
 }
 
 export function makeItemStory(rng, cat, name, tier, desc) {

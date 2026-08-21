@@ -1,4 +1,4 @@
-/* ================= تولید محتوای بازی (۱۰هزار دانجن، ۱۰۰۰ باس، ۱۰هزار تکنیک، ۱۰هزار وسیله) ================= */
+/* ================= تولید محتوای بازی (۱۰هزار دانجن، ۱۰هزار باس، ۱۰هزار تکنیک، ۱۰۰هزار وسیله) ================= */
 import { mulberry32, seedOf, pick, range, hashStr } from "./util.js";
 import { texUrl, makeItemStory } from "./gfx.js";
 
@@ -88,13 +88,13 @@ export function elementMult(atkEl, defEl) {
 export const DUNGEON_COUNT = 10000;
 export function dungeonIndex(i) {
   const rng = mulberry32(seedOf("dungeon", i));
-  const level = Math.floor(i / 10) + 1;            // هر سطح ۱۰ دانجن → تا سطح ۱۰۰۰
-  const tier = Math.min(9, Math.floor(i / 1000));   // ۰..۹
-  const rank = rankOfIndex(tier);
+  const level = Math.min(LEVEL_CAP, Math.floor(i * (LEVEL_CAP / DUNGEON_COUNT)) + 1);
+  const tier = Math.min(9, Math.floor((level - 1) / 1000));
+  const rank = rankOfLevel(level);
   const adj = ADJ[Math.floor(rng() * ADJ.length)];
   const noun = NOUN[Math.floor(rng() * NOUN.length)];
-  const isBossGate = i % 10 === 9 || level === 1000;
-  const name = level === 1000
+  const isBossGate = i % 10 === 9 || level >= LEVEL_CAP;
+  const name = level >= LEVEL_CAP
     ? "دروازهٔ نهایی: تختگاه پادشاه سایه‌ها"
     : (isBossGate ? `${noun} ${adj} — دروازهٔ باس` : `${noun} ${adj}`);
   const monster = MONSTERS[Math.floor(rng() * MONSTERS.length)];
@@ -138,11 +138,11 @@ function makeDungeonStory(rng, noun, adj, monster, level, tier) {
   return pick(rng, openers) + " " + pick(rng, mids) + " " + endings;
 }
 
-/* ---------- باس‌ها (۱۰۰۰) ---------- */
-export const BOSS_COUNT = 1000;
+/* ---------- باس‌ها (۱۰٬۰۰۰ — تا سطح سقف) ---------- */
+export const BOSS_COUNT = 10000;
 export function bossIndex(i) {
   const rng = mulberry32(seedOf("boss", i));
-  const level = i + 1;
+  const level = Math.min(LEVEL_CAP, Math.max(1, i + 1));
   const rank = rankOfLevel(level);
   const nm = BOSS_NAMES[Math.floor(rng() * BOSS_NAMES.length)];
   const ep = BOSS_EPITHETS[Math.floor(rng() * BOSS_EPITHETS.length)];
@@ -234,7 +234,7 @@ export function skillIndex(i) {
   const pre = SK_PRE[Math.floor(rng() * SK_PRE.length)];
   const suf = SK_SUF[Math.floor(rng() * SK_SUF.length)];
   const name = `${pre}ِ ${suf}`;
-  const rankIdx = Math.min(8, Math.floor(i / 111));
+  const rankIdx = Math.min(8, Math.floor(i / 1111));
   const rank = rankOfIndex(rankIdx);
   const pct = 6 + Math.floor(rng() * 20) + rankIdx * 4;
   const dmgPct = 150 + Math.floor(rng() * 120) + rankIdx * 60;
@@ -273,13 +273,14 @@ export function skillIndex(i) {
     default: desc = `افکت ویژه`; break;
   }
   // شرط باز شدن: باید گرایند کنی!
+  const lvlNeed = Math.max(2, Math.floor((i / Math.max(1, SKILL_COUNT - 1)) * 8500) + 2);
   const reqPool = [
-    { t: "level", n: Math.max(2, rankIdx * 12 + 2), label: (n) => `رسیدن به سطح ${n}` },
-    { t: "clicks", n: 400 * Math.pow(2, rankIdx), label: (n) => `${n} کلیک تمرین` },
-    { t: "kills", n: 10 * Math.pow(2.2, rankIdx), label: (n) => `کشتن ${n} باس` },
-    { t: "dungeons", n: 8 * Math.pow(2, rankIdx), label: (n) => `پاکسازی ${n} دانجن` },
-    { t: "duels", n: 2 * Math.pow(1.8, rankIdx), label: (n) => `${n} برد در رقابت` },
-    { t: "extract", n: 1 + rankIdx, label: (n) => `استخراج ${n} سایه` },
+    { t: "level", n: lvlNeed, label: (n) => `رسیدن به سطح ${n}` },
+    { t: "clicks", n: 400 * Math.pow(2, rankIdx) + Math.floor(i * 2), label: (n) => `${n} کلیک تمرین` },
+    { t: "kills", n: 10 * Math.pow(2.2, rankIdx) + Math.floor(i / 20), label: (n) => `کشتن ${n} باس` },
+    { t: "dungeons", n: 8 * Math.pow(2, rankIdx) + Math.floor(i / 25), label: (n) => `پاکسازی ${n} دانجن` },
+    { t: "duels", n: 2 * Math.pow(1.8, rankIdx) + Math.floor(i / 80), label: (n) => `${n} برد در رقابت` },
+    { t: "extract", n: 1 + rankIdx + Math.floor(i / 120), label: (n) => `استخراج ${n} سایه` },
   ];
   const req = reqPool[Math.floor(rng() * reqPool.length)];
   const reqLabel = req.label(Math.max(1, Math.floor(req.n)));

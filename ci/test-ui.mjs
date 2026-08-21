@@ -89,7 +89,7 @@ t("دروازه‌ها: ۳۰ دانجن اول لیست می‌شوند + دکم
   assert.ok(qa("#gate-list .gate-card").length > cards.length, "بعد از «بیشتر» زیاد شد");
 });
 
-t("باس‌ها رندر می‌شوند (۱۰۰۰ باس)", () => {
+t("باس‌ها رندر می‌شوند (۱۰هزار باس)", () => {
   click(qa(".nav-btn").find((b) => b.dataset.page === "battle"));
   assert.ok(qa("#boss-list .boss-card").length >= 25);
 });
@@ -181,6 +181,11 @@ t("باز و بسته شدن برنامه داده را نگه می‌دارد",
   assert.ok(st && st.level >= 1);
   const again = window.__slsState();
   assert.equal(again.stats.clicks, st.stats.clicks);
+});
+
+t("مسابقهٔ کلیکی در باندل هست", () => {
+  assert.equal(typeof window.__slsClickDuel, "function");
+  window.__slsClickDuel();
 });
 
 t("هیچ خطای جاوااسکریپتی رخ نداد", () => {
