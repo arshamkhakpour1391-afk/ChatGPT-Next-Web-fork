@@ -1,8 +1,10 @@
 # سیستم سولو لولینگ (Solo System)
 
-اپ کامل سولو لولینگ برای اندروید — **ساختهٔ ارشام** · نسخه **۳.۸**
+اپ کامل سولو لولینگ برای اندروید — **ساختهٔ ارشام** · نسخه **۳.۹**
 
-پکیج: `com.arsham.solosystem` · minSdk **۲۲** · target **۳۴** · versionCode **۳۸**
+پکیج: `com.arsham.solosystem` · minSdk **۲۲** · target **۳۴** · versionCode **۳۹**
+
+طلا فقط از Reward سرور می‌آید (`apply_play` / `claim_reward` / `finish_duel`). `save_full_state` طلا نمی‌سازد؛ claim_id یک‌بارمصرف است. تکسچرها SVG برداری‌اند نه بیت‌مپ ۴K.
 
 ## انتشار (فقط Gradle)
 
@@ -30,14 +32,23 @@ bash scripts/verify-apk.sh android/app/build/outputs/apk/release/app-release.apk
 ## تست
 
 ```bash
-npm test             # موتور (www لازم نیست)
-npm run test:ui      # خودش اول build می‌کند
-npm run test:deep    # خودش اول build می‌کند
+npm test                # موتور + اقتصاد ضدتقلب
+npm run test:ui         # خودش اول build می‌کند
+npm run test:deep       # خودش اول build می‌کند
+npm run test:integration  # با SUPABASE_URL و SUPABASE_ANON_KEY؛ بدون کلید SKIP
+npm run test:screenshots
 ```
+
+GitHub Actions: engine + ui + deep + integration + screenshots + assembleDebug.
 
 ## دیتابیس
 
-SQL را یک‌بار در Supabase اجرا کن (`sql/schema.sql`). بعد از موفقیت رمز دیتابیس را عوض کن.
+SQL را **یک‌بار کامل** در Supabase اجرا کن:
+
+- `sql/schema.sql` (۱۲۴۱ خط، یک‌شات) **یا**
+- اول `supabase/migrations/20260819000000_solo_leveling.sql` بعد `supabase/migrations/20260821120000_economy_authoritative.sql`
+
+بدون فایل دوم `apply_play` نصب نمی‌شود. بعد از موفقیت رمز دیتابیس را عوض کن. `service_role` را داخل اپ نگذار.
 
 ساعت ماموریت روزانه وقتی آنلاین باشی با آفست سرور هم‌خوان می‌شود؛ منطقهٔ زمانی دستگاه برای برچسب روز می‌ماند.
 

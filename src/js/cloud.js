@@ -111,7 +111,7 @@ export async function savePlayer(state, cols) {
       online = true;
       if (rpc.data.server_ms) setServerNow(rpc.data.server_ms);
       emit("status", { online: true });
-      return { ok: true };
+      return { ok: true, player: unwrapRpc(rpc.data)?.player || rpc.data.player, data: unwrapRpc(rpc.data) };
     }
     online = false;
     emit("status", { online: false });
@@ -486,4 +486,38 @@ export function broadcastFfa(code, event, payload) {
 export function onFfaBroadcast(code, fn) {
   const ch = getBroadcastChannel("ffa-" + code);
   if (ch) ch.on("broadcast", {}, (e) => fn(e.event, e.payload));
+}
+
+export async function applyPlay(kind, claimId, n, index) {
+  try {
+    const { data, error } = await withTimeout(sb.rpc("apply_play", {
+      p_kind: kind, p_claim_id: claimId, p_n: n || 0, p_index: index || 0
+    }), 9000);
+    if (error) return { error: friendlyError(error) };
+    const out = unwrapRpc(data);
+    if (out && out.error) return { error: out.error };
+    return out || { ok: true };
+  } catch (e) { return { error: e }; }
+}
+
+export async function claimReward(kind, claimId) {
+  try {
+    const { data, error } = await withTimeout(sb.rpc("claim_reward", { p_kind: kind, p_claim_id: claimId }), 9000);
+    if (error) return { error: friendlyError(error) };
+    const out = unwrapRpc(data);
+    if (out && out.error) return { error: out.error };
+    return out || { ok: true };
+  } catch (e) { return { error: e }; }
+}
+
+export async function purchaseItem(itemId, gold, gems, claimId) {
+  try {
+    const { data, error } = await withTimeout(sb.rpc("purchase_item", {
+      p_item_id: itemId, p_gold: gold || 0, p_gems: gems || 0, p_claim_id: claimId
+    }), 9000);
+    if (error) return { error: friendlyError(error) };
+    const out = unwrapRpc(data);
+    if (out && out.error) return { error: out.error };
+    return out || { ok: true };
+  } catch (e) { return { error: e }; }
 }

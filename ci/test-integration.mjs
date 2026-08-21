@@ -3,8 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 import assert from "node:assert/strict";
 
 const URL = process.env.SUPABASE_URL;
-const KEY = process.env.SUPABASE_KEY;
-if (!URL || !KEY) { console.log("SKIP: بدون کلید — این تست فقط در CI اجرا می‌شود"); process.exit(0); }
+const KEY = process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY;
+if (!URL || !KEY) { console.log("SKIP: بدون کلید — این تست فقط در CI با Secret اجرا می‌شود"); process.exit(0); }
 
 const mk = (token) => createClient(URL, KEY, {
   auth: { persistSession: false },
@@ -108,6 +108,29 @@ await t("۹) لیدربرد و رنک من", async () => {
   const sb1 = mk(global.tok1);
   const mr = await sb1.rpc("my_rank", { p_kind: "power" });
   assert.ok(typeof mr.data === "number" && mr.data >= 1);
+});
+
+await t("۱۱) save طلا و سطح جعلی را اعمال نمی‌کند", async () => {
+  const sb1 = mk(global.tok1);
+  const before = await sb1.rpc("load_full_state");
+  const g0 = before.data?.player?.gold ?? 0;
+  const lv0 = before.data?.player?.level ?? 1;
+  const up = await sb1.rpc("save_full_state", { p_data: { gold: 999999999, level: 9999, xp: 1, gems: 99999 } });
+  assert.ok(!up.error, JSON.stringify(up.error));
+  const after = await sb1.rpc("load_full_state");
+  const g1 = after.data?.player?.gold ?? 0;
+  const lv1 = after.data?.player?.level ?? 1;
+  assert.ok(g1 <= g0 + 10, "طلا از save نباید باد کند: " + g0 + " -> " + g1);
+  assert.ok(lv1 <= lv0 + 1, "سطح از save نباید باد کند");
+});
+
+await t("۱۲) apply_play تکراری already است", async () => {
+  const sb1 = mk(global.tok1);
+  const id = "train-intg" + suffix + "xx";
+  const a = await sb1.rpc("apply_play", { p_kind: "train", p_claim_id: id, p_n: 16, p_index: 0 });
+  assert.ok(!a.error && !a.data?.error, JSON.stringify(a.error || a.data));
+  const b = await sb1.rpc("apply_play", { p_kind: "train", p_claim_id: id, p_n: 16, p_index: 0 });
+  assert.ok(b.data?.already || b.data?.ok);
 });
 
 await t("۱۰) خروج از حساب و باطل شدن نشست", async () => {

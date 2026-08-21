@@ -381,7 +381,7 @@ t("کاتالوگ ۱۰۰هزار وسیله معتبر است", () => {
   const r = buyItem(st, a.id);
   assert.ok(r.ok && st.items[a.id] === 1);
 });
-t("تکسچر ۴K و داستان برای آیتم و باس و دروازه", () => {
+t("تکسچر برداری SVG و داستان برای آیتم و باس و دروازه", () => {
   const a = catalogIndex(42);
   assert.ok(a.story && a.story.length > 24, "داستان کاتالوگ");
   assert.ok(a.tex && a.tex.indexOf("image/svg") > 0, "تکسچر کاتالوگ");

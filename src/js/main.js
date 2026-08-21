@@ -1,6 +1,7 @@
 /* ================= نقطهٔ شروع برنامه ================= */
 import { el, lsGet, lsSet, lsDel, debounce, nowMs, todayKey, deepClone, notifyLocal, sfx, requestNotifPermission, faNum, initMute } from "./util.js";
 import { newState, computePower, tickState, maxEnergy, STATE_VERSION, missionBucket, applyProgress, dailyQuests, regenEnergy, migrateState, packCloudState } from "./engine.js";
+import { overlayServerEconomy } from "./economy.js";
 import { hunterClass } from "./data.js";
 import { MISSION_INTERVAL_MS, missionOf } from "./data.js";
 import * as cloud from "./cloud.js";
@@ -60,6 +61,16 @@ const pushCloud = debounce(async () => {
     const ok = await upgradeToCloud();
     if (!ok) return;
   }
+  try {
+    const dc = (st.stats.clicks || 0) - (st.cloudClicks || 0);
+    if (dc >= 4) {
+      const n = Math.min(120, dc);
+      const cid = "train-" + nowMs().toString(36) + "-" + n;
+      const play = await cloud.applyPlay("train", cid, n, 0);
+      if (play && play.player) overlayServerEconomy(st, play.player);
+      if (play && (play.ok || play.already)) st.cloudClicks = (st.cloudClicks || 0) + n;
+    }
+  } catch (e) {}
   const packed = packCloudState(st);
   packed.power = computePower(st);
   packed.hunterClass = hunterClass(st.level).name;
@@ -75,6 +86,7 @@ const pushCloud = debounce(async () => {
   if (r.ok) {
     lastCloudSync = nowMs();
     st.cloudAt = lastCloudSync;
+    if (r.player) overlayServerEconomy(st, r.player);
     ui.setCloudBanner("cloud");
   } else if (r.error) {
     ui.setCloudBanner("offline");
@@ -129,6 +141,7 @@ async function onAuthed(r, passFromForm) {
   }
   st.username = uname;
   st.v = STATE_VERSION;
+  if (cloudPlayer) overlayServerEconomy(st, cloudPlayer);
   offlineMode = false;
   saveNow();
   ui.initUI(appObj);
@@ -188,6 +201,7 @@ async function autoLogin() {
       const cloudData = r.player.data && Object.keys(r.player.data).length ? r.player.data : null;
       st = migrateState(cloudData || loadLocalState(acc.userId) || newState(acc.username, acc.userId));
       st.username = acc.username;
+      overlayServerEconomy(st, r.player);
       saveNow();
       ui.initUI(appObj);
       ui.showApp();

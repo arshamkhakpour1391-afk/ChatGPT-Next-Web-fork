@@ -29,10 +29,40 @@ import {
   openClickDuel, clickDuelRemote, clickDuelRemoteEnd, hideClickDuel, openFfaArena,
 } from "./battleui.js";
 import * as cloud from "./cloud.js";
+import { overlayServerEconomy } from "./economy.js";
 import { SCHEMA_SQL } from "./schema-inline.js";
 
 let app = null; // ست می‌شود توسط main
 export function initUI(a) { app = a; }
+
+function cloudOn() { return !!(app && app.isCloud && app.isCloud()); }
+function makeClaim(prefix) {
+  let id = String(prefix || "x") + "-" + nowMs().toString(36) + "-" + Math.floor(Math.random() * 1679616).toString(36);
+  id = id.replace(/[^a-zA-Z0-9:_-]/g, "");
+  if (id.length < 8) id = (id + "xxxxxxxx").slice(0, 16);
+  return id.slice(0, 80);
+}
+function applyPlayerRow(row) {
+  const st = app && app.getSt && app.getSt();
+  if (st && row) overlayServerEconomy(st, row);
+}
+async function cloudApplyPlay(kind, index) {
+  if (!cloudOn()) return null;
+  try {
+    const r = await cloud.applyPlay(kind, makeClaim(kind), 0, index || 0);
+    if (r && r.player) applyPlayerRow(r.player);
+    return r;
+  } catch (e) { return null; }
+}
+async function cloudClaim(kind, claimId) {
+  if (!cloudOn()) return null;
+  const cid = (claimId && claimId.length >= 8) ? String(claimId).replace(/[^a-zA-Z0-9:_-]/g, "").slice(0, 80) : makeClaim(kind);
+  try {
+    const r = await cloud.claimReward(kind, cid);
+    if (r && r.player) applyPlayerRow(r.player);
+    return r;
+  } catch (e) { return null; }
+}
 
 const $ = (id) => el(id);
 function nameTagHtml(level) {
@@ -302,9 +332,10 @@ function renderDailyQuests() {
       ${q.done && !q.claimed ? `<button class="btn btn-gold btn-sm m-claim" data-dq="${q.id}">دریافت جایزه</button>` : q.claimed ? `<span class="chip chip-green">دریافت شد</span>` : ""}
     </div>`);
     const btn = row.querySelector("[data-dq]");
-    if (btn) btn.addEventListener("click", () => {
+    if (btn) btn.addEventListener("click", async () => {
       const r = claimDailyQuest(app.getSt(), q.id);
       if (r.error) return toast(r.error, "bad");
+      await cloudClaim("daily", "daily-" + todayKey() + "-" + q.id);
       toast(`جایزه روزانه: طلا +${fmtNum(r.gold)} و ۱ جواهر`, "gold");
       sfx.coin();
       app.save(); renderHome();
@@ -328,9 +359,10 @@ function renderYearQuest() {
     <div class="m-meta"><span class="chip chip-gold">جایزه: ${fmtNum(q.reward.gold)} طلا + ${fmtNum(q.reward.xp)} XP + ${faNum(q.reward.gems)} جواهر</span></div>
     ${done && !y.claimedToday ? `<button class="btn btn-gold btn-sm" id="btn-year-claim" style="width:100%;margin-top:6px">دریافت جایزهٔ روز ${faNum(y.day)}</button>` : y.claimedToday ? `<span class="chip chip-green">دریافت شد — فردا ادامه بده</span>` : `<span class="chip chip-blue">هنوز کامل نشده</span>`}
     <p style="font-size:9.5px;color:var(--txt3);margin-top:6px">اگر یک روز کامل نگذرد و کارها انجام نشود: مجازات!</p>`;
-  $("btn-year-claim")?.addEventListener("click", () => {
+  $("btn-year-claim")?.addEventListener("click", async () => {
     const r = claimYearDay(app.getSt());
     if (r.error) return toast(r.error, "bad");
+    await cloudClaim("year", "year-" + todayKey() + "-d" + (app.getSt().year?.day || 1));
     toast("جایزهٔ مسیر سالانه دریافت شد!", "gold");
     sfx.win(); confetti();
     app.save(); renderHome();
@@ -433,8 +465,15 @@ function renderQuick() {
     toast(r.weapon || r.armor ? "بهترین تجهیزات پوشیده شد" : "چیزی برای تجهیز نبود", "good");
     app.save(); renderTopbar();
   });
-  mk("🎁 دریافت همه", () => {
-    const n = claimAllReady(app.getSt());
+  mk("🎁 دریافت همه", async () => {
+    const st = app.getSt();
+    const readyM = activeMissions(st).filter((m) => st.missions[m.id]?.done && !st.missions[m.id]?.claimed);
+    const readyQ = Object.values(dailyQuests(st)).filter((q) => q.done && !q.claimed);
+    const n = claimAllReady(st);
+    if (n && cloudOn()) {
+      for (const m of readyM) await cloudClaim("mission", "mission-" + m.id);
+      for (const q of readyQ) await cloudClaim("daily", "daily-" + todayKey() + "-" + q.id);
+    }
     toast(n ? `${faNum(n)} جایزه گرفته شد` : "چیزی آماده نیست", n ? "gold" : "info");
     app.save(); renderHome();
   });
@@ -505,6 +544,7 @@ function maybeDailyLogin() {
   if (st.pendingLogin) {
     const r = st.pendingLogin;
     st.pendingLogin = null;
+    cloudClaim("login", "login-" + todayKey());
     app.save();
     sysWindow(`<div class="sys-row"><span>ورود روزانه</span><b>روز ${faNum(r.streak)}</b></div>
       <div class="sys-row"><span>طلا</span><b>+${fmtNum(r.gold)}</b></div>
@@ -542,9 +582,16 @@ export function renderMissions() {
   } else if (!oldClaim) {
     const wrap = make(`<div style="padding:0 12px 8px"><button class="btn btn-gold btn-sm" id="btn-claim-all" style="width:100%">دریافت همهٔ جوایز آماده‌</button></div>`);
     box.parentNode.insertBefore(wrap, box);
-    wrap.querySelector("#btn-claim-all").addEventListener("click", () => {
-      const n = claimAllReady(app.getSt());
+    wrap.querySelector("#btn-claim-all").addEventListener("click", async () => {
+      const st = app.getSt();
+      const readyM = activeMissions(st).filter((m) => st.missions[m.id]?.done && !st.missions[m.id]?.claimed);
+      const readyQ = Object.values(dailyQuests(st)).filter((q) => q.done && !q.claimed);
+      const n = claimAllReady(st);
       if (!n) return toast("چیزی برای دریافت نیست", "info");
+      if (cloudOn()) {
+        for (const m of readyM) await cloudClaim("mission", "mission-" + m.id);
+        for (const q of readyQ) await cloudClaim("daily", "daily-" + todayKey() + "-" + q.id);
+      }
       toast(`${faNum(n)} جایزه دریافت شد`, "gold");
       sfx.coin(); app.save(); renderMissions(); renderTopbar();
     });
@@ -581,9 +628,10 @@ export function renderMissions() {
       ${rec.done && !rec.claimed ? `<button class="btn btn-gold btn-sm m-claim" data-mid="${m.id}">دریافت جایزه</button>` : rec.claimed ? `<span class="chip chip-green">دریافت شد ✓</span>` : `<span class="chip chip-blue">در حال انجام...</span>`}
     </div>`);
     const btn = card.querySelector("[data-mid]");
-    if (btn) btn.addEventListener("click", () => {
+    if (btn) btn.addEventListener("click", async () => {
       const r = claimMission(app.getSt(), m.id);
       if (r.error) return toast(r.error, "bad");
+      await cloudClaim("mission", "mission-" + m.id);
       toast(`ماموریت انجام شد: +${fmtNum(r.m.gold)} طلا، +${fmtNum(r.m.xp)} XP`, "gold");
       sfx.coin();
       app.save(); renderMissions();
@@ -713,9 +761,10 @@ export function renderGates() {
     </div>`);
     card.querySelector(".rank-ico")?.addEventListener("click", () => inspectThing({ name: d.name, story: d.story, tex: d.tex, desc: d.monster, element: d.element, archetype: d.archetype, i: d.i }));
     card.querySelector(".gate-go").addEventListener("click", () => enterDungeon(i, d));
-    card.querySelector("[data-sw]")?.addEventListener("click", () => {
+    card.querySelector("[data-sw]")?.addEventListener("click", async () => {
       const r = sweepDungeon(app.getSt(), i);
       if (r.error) return toast(r.error, "bad");
+      await cloudApplyPlay("sweep", i);
       toast(`جارو شد! +${fmtNum(r.gold)} طلا · +${fmtNum(r.xp)} XP`, "gold");
       sfx.coin(); app.save(); renderTopbar(); renderGates();
     });
@@ -750,10 +799,11 @@ function enterDungeon(i, d) {
       addXP(st, rewards.xp);
       st.dungeons = st.dungeons || {};
       st.dungeons[i] = { cleared: true, count: (st.dungeons[i]?.count || 0) + 1, last: nowMs() };
-      app.save();
       const extra = rewardMult > 1.01 ? " (جایزهٔ ویژه)" : "";
       toast(`دانجن پاک شد! +${fmtNum(rewards.gold)} طلا، +${fmtNum(rewards.xp)} XP${extra}`, "good", 3400);
       if (rewards.essenceChance > 0.02) maybeArise({ name: "سایهٔ " + src.monster, rankKey: src.rank.key, power: src.bossPower, emoji: src.bossEmoji, baseChance: rewards.essenceChance });
+      cloudApplyPlay("dungeon", i).then(() => { app.save(); renderTopbar(); if (currentPage === "gates") renderGates(); });
+      app.save();
       renderTopbar();
       if (currentPage === "gates") renderGates();
     },
@@ -875,9 +925,10 @@ function fightBoss(i, b) {
       addXP(st, rewards.xp);
       st.bosses = st.bosses || {};
       st.bosses[i] = { killed: true, count: (st.bosses[i]?.count || 0) + 1, last: nowMs() };
-      app.save();
       toast(`باس شکست خورد! +${fmtNum(rewards.gold)} طلا، +${fmtNum(rewards.xp)} XP`, "good", 3400);
       if (rewards.essenceChance > 0.02) maybeArise({ name: b.name, rankKey: b.rank.key, power: b.atk * 6, emoji: b.emoji, baseChance: rewards.essenceChance });
+      cloudApplyPlay("boss", i).then(() => { app.save(); renderTopbar(); if (currentPage === "battle") renderBosses(); });
+      app.save();
       renderTopbar();
       if (currentPage === "battle") renderBosses();
     },
@@ -1007,7 +1058,7 @@ export function renderShop() {
     more.onclick = () => { shopExtra += 36; renderShop(); };
   }
 }
-function buyFromShop(itemId, deal) {
+async function buyFromShop(itemId, deal) {
   const st = app.getSt();
   let cost;
   if (deal) {
@@ -1017,12 +1068,18 @@ function buyFromShop(itemId, deal) {
   }
   const it = itemById(itemId);
   const price = cost || it.price;
-  if (price.gem != null) {
-    if (st.gems < price.gem) return toast("جواهر کافی نداری!", "bad");
-    st.gems -= price.gem;
+  const goldCost = price.gem != null ? 0 : (price.gold || 0);
+  const gemCost = price.gem != null ? price.gem : 0;
+  if (gemCost && st.gems < gemCost) return toast("جواهر کافی نداری!", "bad");
+  if (goldCost && st.gold < goldCost) return toast("طلا کافی نداری! گرایند کن یا بفروش", "bad");
+  if (cloudOn()) {
+    const cid = makeClaim("buy-" + itemId);
+    const pr = await cloud.purchaseItem(itemId, goldCost, gemCost, cid);
+    if (pr && pr.error) return toast(typeof pr.error === "string" ? pr.error : "خرید روی سرور رد شد", "bad");
+    if (pr && pr.player) applyPlayerRow(pr.player);
   } else {
-    if (st.gold < price.gold) return toast("طلا کافی نداری! گرایند کن یا بفروش", "bad");
-    st.gold -= price.gold;
+    if (gemCost) st.gems -= gemCost;
+    else st.gold -= goldCost;
   }
   addItem(st, itemId, 1);
   st.stats.shopBuys = (st.stats.shopBuys || 0) + 1;
@@ -1971,7 +2028,7 @@ $("btn-settings").addEventListener("click", () => {
     title: "تنظیمات",
     body: `
       <div class="m-meta" style="justify-content:space-between"><span>وضعیت ابر: <b>${cloudState}</b></span><span>دیتابیس: <b>${cloud.schemaReady() ? "✅ نصب شده" : "❌ نصب نشده"}</b></span></div>
-      <div class="m-meta" style="justify-content:space-between"><span>حساب: <b>${esc(st.username)}</b></span><span>سیستم سولو ۳.۸</span></div>
+      <div class="m-meta" style="justify-content:space-between"><span>حساب: <b>${esc(st.username)}</b></span><span>سیستم سولو ۳.۹</span></div>
       <div class="m-meta"><span>همگام ابر: <b>${app.isCloud && app.isCloud() ? "فعال — مهارت و آمار کامل" : "محلی (وقتی اینترنت باشد می‌رود روی ابر)"}</b></span></div>
       <p style="margin-top:10px">ساختهٔ ارشام — داده‌ها روی ابر و دستگاه می‌مانند.</p>
       <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px">
