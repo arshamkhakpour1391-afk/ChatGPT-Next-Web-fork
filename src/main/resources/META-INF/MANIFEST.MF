@@ -1,0 +1,7 @@
+Manifest-Version: 1.0
+Implementation-Title: Ping Fix
+Implementation-Version: 2.0.0
+Implementation-Vendor: Arsham
+Fabric-Minecraft-Version: 1.21.11
+Built-By: Arsham
+Created-By: Arsham

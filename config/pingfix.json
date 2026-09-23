@@ -1,0 +1,18 @@
+{
+  "mode": "AUTO",
+  "hudEnabled": false,
+  "showScreenIcon": false,
+  "adaptiveTickBudget": true,
+  "maxTickBudgetNanos": 12000000,
+  "enablePacketPrioritization": true,
+  "enableBurstSmoothing": true,
+  "enableChunkSmoothing": true,
+  "enableChunkFreezeProtection": true,
+  "enableGhostBlockSync": true,
+  "enableEntitySyncOptimization": true,
+  "enableTcpNoDelay": true,
+  "enableSpikeMitigation": true,
+  "enableServerProfiles": true,
+  "strictPrivacy": true,
+  "logLevel": "INFO"
+}

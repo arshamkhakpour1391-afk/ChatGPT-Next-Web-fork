@@ -1,0 +1,18 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.arsham.pingfix.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [],
+  "client": [
+    "ClientPlayNetworkHandlerMixin",
+    "MinecraftClientMixin",
+    "ClientChunkManagerMixin",
+    "ClientPlayerInteractionManagerMixin",
+    "WorldRendererMixin",
+    "ClientConnectionMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

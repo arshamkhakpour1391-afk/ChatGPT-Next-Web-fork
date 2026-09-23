@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "pingfix",
+  "version": "2.0.0",
+  "name": "Ping Fix",
+  "description": "Production-grade client-side Minecraft networking, anti-desync, and tick optimization engine V2. Created by Arsham.",
+  "authors": [
+    "Arsham"
+  ],
+  "contact": {
+    "homepage": "https://github.com/arshamkhakpour1391-afk/ChatGPT-Next-Web-fork",
+    "sources": "https://github.com/arshamkhakpour1391-afk/ChatGPT-Next-Web-fork"
+  },
+  "license": "MIT",
+  "icon": "assets/pingfix/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.arsham.pingfix.PingFixClient"
+    ]
+  },
+  "mixins": [
+    "pingfix.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.15.0",
+    "minecraft": "1.21.11",
+    "java": ">=21"
+  },
+  "custom": {
+    "creator": "Arsham",
+    "officialCredit": "Created by Arsham",
+    "version": "2.0.0",
+    "target": "Minecraft Java Edition 1.21.11 Fabric ONLY"
+  }
+}
