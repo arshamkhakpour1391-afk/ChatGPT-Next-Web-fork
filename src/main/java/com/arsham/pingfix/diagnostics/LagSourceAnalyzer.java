@@ -12,7 +12,7 @@ import com.arsham.pingfix.performance.FrameMonitor;
 public class LagSourceAnalyzer {
 
     public enum LagCause {
-        OPTIMAL("Optimal", "All networking, hit-reg, and tick pipelines are operating smoothly."),
+        OPTIMAL("Optimal", "All networking, block-reg, hit-reg, and tick pipelines are operating smoothly."),
         NETWORK_LATENCY("Network Latency", "High ping detected between client and server."),
         NETWORK_JITTER("Network Jitter", "Packet arrival timing is fluctuating significantly."),
         CLIENT_TICK("Client Tick Load", "Local client tick workload is causing delay."),

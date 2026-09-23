@@ -6,6 +6,6 @@ package com.arsham.pingfix.privacy;
  */
 public class PrivacyManager {
     public void verifyPrivacyIntegrity() {
-        // Enforce 100% local offline execution
+        // 100% offline local execution
     }
 }

@@ -6,7 +6,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 /**
- * Configuration manager: auto-calibrated defaults for V3.
+ * Configuration manager: auto-calibrated defaults for V4.
  * Created by Arsham for Minecraft 1.21.11 Fabric.
  */
 public class ConfigManager {
@@ -29,11 +29,11 @@ public class ConfigManager {
 
         try {
             String content = new String(Files.readAllBytes(CONFIG_PATH), StandardCharsets.UTF_8);
+            if (content.contains("\"enableBlockRegisterOptimization\":false") || content.contains("\"enableBlockRegisterOptimization\": false")) config.enableBlockRegisterOptimization = false;
             if (content.contains("\"enableHitRegOptimization\":false") || content.contains("\"enableHitRegOptimization\": false")) config.enableHitRegOptimization = false;
             if (content.contains("\"enableTrajectoryPrediction\":false") || content.contains("\"enableTrajectoryPrediction\": false")) config.enableTrajectoryPrediction = false;
             if (content.contains("\"adaptiveTickBudget\":false") || content.contains("\"adaptiveTickBudget\": false")) config.adaptiveTickBudget = false;
             if (content.contains("\"enableGhostBlockSync\":false") || content.contains("\"enableGhostBlockSync\": false")) config.enableGhostBlockSync = false;
-            if (content.contains("\"enableEntitySyncOptimization\":false") || content.contains("\"enableEntitySyncOptimization\": false")) config.enableEntitySyncOptimization = false;
         } catch (Exception e) {
             // Keep safe defaults
         }
@@ -44,20 +44,22 @@ public class ConfigManager {
             if (CONFIG_PATH.getParent() != null) {
                 Files.createDirectories(CONFIG_PATH.getParent());
             }
-            String json = "{\n" +
-                    "  \"mode\": \"AUTO\",\n" +
-                    "  \"hudEnabled\": false,\n" +
-                    "  \"showScreenIcon\": false,\n" +
-                    "  \"enableHitRegOptimization\": " + config.enableHitRegOptimization + ",\n" +
-                    "  \"enableTrajectoryPrediction\": " + config.enableTrajectoryPrediction + ",\n" +
-                    "  \"adaptiveTickBudget\": " + config.adaptiveTickBudget + ",\n" +
-                    "  \"enableGhostBlockSync\": " + config.enableGhostBlockSync + ",\n" +
-                    "  \"enableEntitySyncOptimization\": " + config.enableEntitySyncOptimization + ",\n" +
-                    "  \"enableInventorySyncProtection\": " + config.enableInventorySyncProtection + ",\n" +
-                    "  \"enableTcpNoDelay\": " + config.enableTcpNoDelay + ",\n" +
-                    "  \"strictPrivacy\": true\n" +
-                    "}\n";
-            Files.write(CONFIG_PATH, json.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            sb.append("{\n");
+            sb.append("  \"mode\": \"AUTO\",\n");
+            sb.append("  \"hudEnabled\": false,\n");
+            sb.append("  \"showScreenIcon\": false,\n");
+            sb.append("  \"enableBlockRegisterOptimization\": ").append(config.enableBlockRegisterOptimization).append(",\n");
+            sb.append("  \"enableHitRegOptimization\": ").append(config.enableHitRegOptimization).append(",\n");
+            sb.append("  \"enableTrajectoryPrediction\": ").append(config.enableTrajectoryPrediction).append(",\n");
+            sb.append("  \"adaptiveTickBudget\": ").append(config.adaptiveTickBudget).append(",\n");
+            sb.append("  \"enableGhostBlockSync\": ").append(config.enableGhostBlockSync).append(",\n");
+            sb.append("  \"enableEntitySyncOptimization\": ").append(config.enableEntitySyncOptimization).append(",\n");
+            sb.append("  \"enableInventorySyncProtection\": ").append(config.enableInventorySyncProtection).append(",\n");
+            sb.append("  \"enableTcpNoDelay\": ").append(config.enableTcpNoDelay).append(",\n");
+            sb.append("  \"strictPrivacy\": true\n");
+            sb.append("}\n");
+            Files.write(CONFIG_PATH, sb.toString().getBytes(StandardCharsets.UTF_8));
         } catch (Exception e) {
             // Safe fallback
         }

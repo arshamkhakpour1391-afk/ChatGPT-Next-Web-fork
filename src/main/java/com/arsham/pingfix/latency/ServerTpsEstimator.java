@@ -4,7 +4,7 @@ import com.arsham.pingfix.performance.AllocationOptimizer;
 
 /**
  * Real-time Server TPS Estimator.
- * Tracks actual server tick health even under severe network lag or server overload.
+ * Tracks actual server tick health even under severe network lag.
  * Created by Arsham for Minecraft 1.21.11 Fabric.
  */
 public class ServerTpsEstimator {
@@ -16,7 +16,7 @@ public class ServerTpsEstimator {
         long now = System.nanoTime();
         if (lastTimePacketNanos > 0) {
             long delta = now - lastTimePacketNanos;
-            if (delta > 100_000_000L && delta < 3_000_000_000L) { // 0.1s to 3s window
+            if (delta > 100_000_000L && delta < 3_000_000_000L) {
                 tickDeltaBuffer.add(delta);
                 double avgDeltaSec = (tickDeltaBuffer.getAverage() / 1_000_000_000.0);
                 if (avgDeltaSec > 0) {

@@ -19,6 +19,7 @@ public class WorldRendererMixin {
         try {
             PingFixCore.getInstance().getChunkOptimizer().getChunkScheduler().clear();
             PingFixCore.getInstance().getGhostBlockManager().getDesyncDetector().clear();
+            PingFixCore.getInstance().getBlockRegisterEngine().clear();
         } catch (Throwable t) {
             // Graceful error isolation
         }

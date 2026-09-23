@@ -1,17 +1,18 @@
 package com.arsham.pingfix.config;
 
 /**
- * Auto-calibrated configuration model for Ping Fix V3.
- * Runs 100% on intelligent AUTO in the background.
+ * Auto-calibrated configuration model for Ping Fix V4 (Ultra).
+ * Runs 100% on intelligent AUTO in the background with zero setup.
  * Created by Arsham for Minecraft 1.21.11 Fabric.
  */
 public class PingFixConfig {
     public final boolean hudEnabled = false;
     public final boolean showScreenIcon = false;
 
-    // Core Performance & Anti-Lag Optimizations
+    // Advanced Core Optimizations (All active by default in AUTO mode)
     public boolean adaptiveTickBudget = true;
-    public long maxTickBudgetNanos = 12_000_000L; // 12ms max per-tick budget
+    public long maxTickBudgetNanos = 12_000_000L;
+    public boolean enableBlockRegisterOptimization = true;
     public boolean enableHitRegOptimization = true;
     public boolean enableTrajectoryPrediction = true;
     public boolean enableTpsEstimation = true;

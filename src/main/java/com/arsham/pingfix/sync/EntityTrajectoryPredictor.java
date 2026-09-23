@@ -7,8 +7,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Velocity-Guided Entity Trajectory Predictor & Hitbox Aligning Engine.
- * Eliminates jittery entity stutter and ghost swings on laggy servers without cheating.
- * 100% Anti-Cheat Safe.
+ * Eliminates jittery entity stutter and ghost swings on laggy servers.
  * Created by Arsham for Minecraft 1.21.11 Fabric.
  */
 public class EntityTrajectoryPredictor {
@@ -45,7 +44,7 @@ public class EntityTrajectoryPredictor {
         if (state == null) return null;
 
         long elapsed = System.currentTimeMillis() - state.lastTimestamp;
-        if (elapsed > 400) return null; // Stale data fallback
+        if (elapsed > 400) return null;
 
         if (tpsEstimator.isServerLagging()) {
             double dt = (elapsed / 1000.0);

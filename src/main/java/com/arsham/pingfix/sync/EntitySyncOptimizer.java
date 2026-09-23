@@ -4,9 +4,7 @@ import com.arsham.pingfix.config.PingFixConfig;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Entity synchronization optimizer: smooths entity interpolation during server lag spikes.
- * Prevents snapping and jerky entity teleports when server bursts delayed movement packets.
- * 100% Anti-Cheat safe.
+ * Entity synchronization optimizer.
  * Created by Arsham for Minecraft 1.21.11 Fabric.
  */
 public class EntitySyncOptimizer {

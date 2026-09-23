@@ -5,7 +5,7 @@ import io.netty.channel.ChannelOption;
 import com.arsham.pingfix.config.PingFixConfig;
 
 /**
- * Socket pipeline optimizer: sets TCP_NODELAY, IP_TOS (Low Delay flag = 0x10) and optimizes thread contention.
+ * Socket pipeline optimizer: sets TCP_NODELAY, IP_TOS (Low Delay DSCP = 0x10) and optimizes thread contention.
  * Created by Arsham for Minecraft 1.21.11 Fabric.
  */
 public class NetworkOptimizer {
@@ -29,7 +29,7 @@ public class NetworkOptimizer {
             if (channel.isOpen() && channel.config() != null) {
                 channel.config().setOption(ChannelOption.TCP_NODELAY, Boolean.TRUE);
                 channel.config().setOption(ChannelOption.SO_KEEPALIVE, Boolean.TRUE);
-                channel.config().setOption(ChannelOption.IP_TOS, 0x10); // DSCP Low Delay flag
+                channel.config().setOption(ChannelOption.IP_TOS, 0x10);
             }
         } catch (Throwable t) {
             // Graceful fallback

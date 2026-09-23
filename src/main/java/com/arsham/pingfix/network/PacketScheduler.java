@@ -6,7 +6,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * Protocol-aware packet scheduler.
- * High-priority combat and interaction tasks execute immediately.
+ * High-priority combat, block placement, and interaction tasks execute immediately.
  * 100% Anti-Cheat safe.
  * Created by Arsham for Minecraft 1.21.11 Fabric.
  */

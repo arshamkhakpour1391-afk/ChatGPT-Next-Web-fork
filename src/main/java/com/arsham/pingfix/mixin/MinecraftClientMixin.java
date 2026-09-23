@@ -25,6 +25,7 @@ public class MinecraftClientMixin {
             long budgetNanos = core.getAdaptiveScheduler().getCalculatedBudgetNanos();
             WorkloadBudget budget = new WorkloadBudget(budgetNanos);
             core.getNetworkOptimizer().getPacketScheduler().processScheduledTasks(budget);
+            core.getBlockRegisterEngine().cleanupStaleRecords();
             core.getGhostBlockManager().periodicCleanup();
         } catch (Throwable t) {
             // Graceful error isolation

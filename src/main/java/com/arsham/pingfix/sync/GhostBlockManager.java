@@ -8,9 +8,7 @@ import net.minecraft.util.math.BlockPos;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Ultra-Robust Ghost Block Prevention Engine for laggy servers.
- * Instantly synchronizes authoritative server blocks and forces render updates.
- * 100% Anti-Cheat safe.
+ * Ultra-Robust Ghost Block Prevention Engine.
  * Created by Arsham for Minecraft 1.21.11 Fabric.
  */
 public class GhostBlockManager {
@@ -47,7 +45,7 @@ public class GhostBlockManager {
                     client.worldRenderer.scheduleBlockRerenderIfNeeded(pos, currentState, newState);
                 }
             } catch (Throwable t) {
-                // Ignore render hook failure
+                // Ignore render error
             }
         }
     }
