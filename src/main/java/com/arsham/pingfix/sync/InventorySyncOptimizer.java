@@ -25,11 +25,6 @@ public class InventorySyncOptimizer {
         pendingTransactions.updateAndGet(v -> Math.max(0, v - 1));
     }
 
-    public int getPendingTransactions() {
-        return pendingTransactions.get();
-    }
-
-    public void reset() {
-        pendingTransactions.set(0);
-    }
+    public int getPendingTransactions() { return pendingTransactions.get(); }
+    public void reset() { pendingTransactions.set(0); }
 }

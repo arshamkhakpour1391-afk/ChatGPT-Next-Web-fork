@@ -1,7 +1,7 @@
 package com.arsham.pingfix.notification;
 
 /**
- * Notification manager: silent background operation by default.
+ * Silent background notification manager.
  * Created by Arsham for Minecraft 1.21.11 Fabric.
  */
 public class NotificationManager {

@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "id": "pingfix",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "name": "Ping Fix",
-  "description": "Production-grade client-side Minecraft networking, anti-desync, and tick optimization engine V2. Created by Arsham.",
+  "description": "Next-generation client-side networking, sub-tick hit registration, anti-desync, and tick optimization engine. Created by Arsham.",
   "authors": [
     "Arsham"
   ],
@@ -30,7 +30,7 @@
   "custom": {
     "creator": "Arsham",
     "officialCredit": "Created by Arsham",
-    "version": "2.0.0",
+    "version": "3.0.0",
     "target": "Minecraft Java Edition 1.21.11 Fabric ONLY"
   }
 }

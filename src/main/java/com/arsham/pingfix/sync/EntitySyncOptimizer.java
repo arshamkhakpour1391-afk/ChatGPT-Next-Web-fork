@@ -21,7 +21,6 @@ public class EntitySyncOptimizer {
         if (!config.enableEntitySyncOptimization) return true;
         long now = System.currentTimeMillis();
         Long last = lastEntityUpdate.put(entityId, now);
-        // Suppress intermediate redundant sub-millisecond duplicate updates
         return last == null || (now - last >= 1);
     }
 

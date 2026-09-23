@@ -39,10 +39,8 @@ public class GhostBlockManager {
 
         BlockState currentState = world.getBlockState(pos);
         if (currentState != null && !currentState.equals(newState)) {
-            // Apply authoritative server state immediately
             world.setBlockState(pos, newState, 3);
             
-            // Force immediate render mesh refresh for the affected block
             try {
                 MinecraftClient client = MinecraftClient.getInstance();
                 if (client.worldRenderer != null) {

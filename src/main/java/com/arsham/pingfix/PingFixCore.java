@@ -7,6 +7,7 @@ import com.arsham.pingfix.tick.*;
 import com.arsham.pingfix.network.*;
 import com.arsham.pingfix.chunk.*;
 import com.arsham.pingfix.sync.*;
+import com.arsham.pingfix.combat.*;
 import com.arsham.pingfix.profile.*;
 import com.arsham.pingfix.diagnostics.*;
 import com.arsham.pingfix.privacy.*;
@@ -14,14 +15,15 @@ import com.arsham.pingfix.compat.*;
 import com.arsham.pingfix.notification.*;
 
 /**
- * Ping Fix Core V2: Master coordinator for all client networking & tick optimizations.
+ * Ping Fix Master Coordinator (V3 Ultimate).
+ * Next-Generation Client-Side Networking, Sub-Tick Hit Registration & Tick Optimization Engine.
  * 100% Anti-Cheat Safe / Non-Bannable.
- * Created by Arsham for Minecraft 1.21.11 Fabric.
+ * Official Credit: Created by Arsham for Minecraft 1.21.11 Fabric.
  */
 public class PingFixCore {
     public static final String MOD_ID = "pingfix";
     public static final String MOD_NAME = "Ping Fix";
-    public static final String VERSION = "2.0.0";
+    public static final String VERSION = "3.0.0";
     public static final String CREATOR = "Arsham";
     public static final String TARGET = "Minecraft 1.21.11 Fabric";
 
@@ -36,6 +38,7 @@ public class PingFixCore {
     private final CompatibilityManager compatibilityManager;
     private final PerformanceMonitor performanceMonitor;
     private final FrameMonitor frameMonitor;
+    private final ServerTpsEstimator tpsEstimator;
     private final LatencyEngine latencyEngine;
     private final JitterEngine jitterEngine;
     private final SpikeDetector spikeDetector;
@@ -43,6 +46,8 @@ public class PingFixCore {
     private final AdaptiveScheduler adaptiveScheduler;
     private final ClientTickOptimizer clientTickOptimizer;
     private final NetworkOptimizer networkOptimizer;
+    private final HitRegOptimizer hitRegOptimizer;
+    private final EntityTrajectoryPredictor trajectoryPredictor;
     private final ChunkOptimizer chunkOptimizer;
     private final DesyncDetector desyncDetector;
     private final GhostBlockManager ghostBlockManager;
@@ -58,6 +63,7 @@ public class PingFixCore {
         this.compatibilityManager = new CompatibilityManager();
         this.performanceMonitor = new PerformanceMonitor();
         this.frameMonitor = new FrameMonitor();
+        this.tpsEstimator = new ServerTpsEstimator();
         this.latencyEngine = new LatencyEngine();
         this.jitterEngine = new JitterEngine();
         this.spikeDetector = new SpikeDetector();
@@ -67,20 +73,22 @@ public class PingFixCore {
         this.adaptiveScheduler = new AdaptiveScheduler(config);
         this.clientTickOptimizer = new ClientTickOptimizer(performanceMonitor, adaptiveScheduler);
         this.networkOptimizer = new NetworkOptimizer(config);
+        this.hitRegOptimizer = new HitRegOptimizer(config, latencyEngine, tpsEstimator, networkOptimizer);
+        this.trajectoryPredictor = new EntityTrajectoryPredictor(config, tpsEstimator);
         this.chunkOptimizer = new ChunkOptimizer(config, performanceMonitor);
         this.desyncDetector = new DesyncDetector();
         this.ghostBlockManager = new GhostBlockManager(config, desyncDetector);
         this.entitySyncOptimizer = new EntitySyncOptimizer(config);
         this.inventorySyncOptimizer = new InventorySyncOptimizer(config);
         this.serverProfileManager = new ServerProfileManager(config);
-        this.diagnosticsManager = new DiagnosticsManager(latencyEngine, jitterEngine, performanceMonitor, frameMonitor, networkOptimizer);
+        this.diagnosticsManager = new DiagnosticsManager(latencyEngine, jitterEngine, performanceMonitor, frameMonitor, networkOptimizer, hitRegOptimizer);
         this.notificationManager = new NotificationManager();
     }
 
     public void initialize() {
         privacyManager.verifyPrivacyIntegrity();
         compatibilityManager.detectEnvironment();
-        System.out.println("[PingFix V2] Initialized Ping Fix v" + VERSION + " (Target: " + TARGET + ") - Created by " + CREATOR);
+        System.out.println("[Ping Fix] Initialized Ping Fix v" + VERSION + " (Target: " + TARGET + ") - Created by " + CREATOR);
     }
 
     public void optimizeNow() {
@@ -91,6 +99,7 @@ public class PingFixCore {
         );
         chunkOptimizer.getChunkScheduler().clear();
         entitySyncOptimizer.clear();
+        trajectoryPredictor.clear();
         ghostBlockManager.periodicCleanup();
     }
 
@@ -104,6 +113,7 @@ public class PingFixCore {
     public CompatibilityManager getCompatibilityManager() { return compatibilityManager; }
     public PerformanceMonitor getPerformanceMonitor() { return performanceMonitor; }
     public FrameMonitor getFrameMonitor() { return frameMonitor; }
+    public ServerTpsEstimator getTpsEstimator() { return tpsEstimator; }
     public LatencyEngine getLatencyEngine() { return latencyEngine; }
     public JitterEngine getJitterEngine() { return jitterEngine; }
     public SpikeDetector getSpikeDetector() { return spikeDetector; }
@@ -111,6 +121,8 @@ public class PingFixCore {
     public AdaptiveScheduler getAdaptiveScheduler() { return adaptiveScheduler; }
     public ClientTickOptimizer getClientTickOptimizer() { return clientTickOptimizer; }
     public NetworkOptimizer getNetworkOptimizer() { return networkOptimizer; }
+    public HitRegOptimizer getHitRegOptimizer() { return hitRegOptimizer; }
+    public EntityTrajectoryPredictor getTrajectoryPredictor() { return trajectoryPredictor; }
     public ChunkOptimizer getChunkOptimizer() { return chunkOptimizer; }
     public GhostBlockManager getGhostBlockManager() { return ghostBlockManager; }
     public EntitySyncOptimizer getEntitySyncOptimizer() { return entitySyncOptimizer; }

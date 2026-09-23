@@ -6,7 +6,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 /**
- * Configuration manager: auto-calibrated defaults for V2.
+ * Configuration manager: auto-calibrated defaults for V3.
  * Created by Arsham for Minecraft 1.21.11 Fabric.
  */
 public class ConfigManager {
@@ -29,10 +29,11 @@ public class ConfigManager {
 
         try {
             String content = new String(Files.readAllBytes(CONFIG_PATH), StandardCharsets.UTF_8);
+            if (content.contains("\"enableHitRegOptimization\":false") || content.contains("\"enableHitRegOptimization\": false")) config.enableHitRegOptimization = false;
+            if (content.contains("\"enableTrajectoryPrediction\":false") || content.contains("\"enableTrajectoryPrediction\": false")) config.enableTrajectoryPrediction = false;
             if (content.contains("\"adaptiveTickBudget\":false") || content.contains("\"adaptiveTickBudget\": false")) config.adaptiveTickBudget = false;
             if (content.contains("\"enableGhostBlockSync\":false") || content.contains("\"enableGhostBlockSync\": false")) config.enableGhostBlockSync = false;
             if (content.contains("\"enableEntitySyncOptimization\":false") || content.contains("\"enableEntitySyncOptimization\": false")) config.enableEntitySyncOptimization = false;
-            if (content.contains("\"enableInventorySyncProtection\":false") || content.contains("\"enableInventorySyncProtection\": false")) config.enableInventorySyncProtection = false;
         } catch (Exception e) {
             // Keep safe defaults
         }
@@ -47,6 +48,8 @@ public class ConfigManager {
                     "  \"mode\": \"AUTO\",\n" +
                     "  \"hudEnabled\": false,\n" +
                     "  \"showScreenIcon\": false,\n" +
+                    "  \"enableHitRegOptimization\": " + config.enableHitRegOptimization + ",\n" +
+                    "  \"enableTrajectoryPrediction\": " + config.enableTrajectoryPrediction + ",\n" +
                     "  \"adaptiveTickBudget\": " + config.adaptiveTickBudget + ",\n" +
                     "  \"enableGhostBlockSync\": " + config.enableGhostBlockSync + ",\n" +
                     "  \"enableEntitySyncOptimization\": " + config.enableEntitySyncOptimization + ",\n" +

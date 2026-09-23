@@ -8,7 +8,7 @@ import com.arsham.pingfix.config.PingFixConfig;
  */
 public class AdaptiveScheduler {
     private final PingFixConfig config;
-    private volatile long calculatedBudgetNanos = 10_000_000L; // 10ms default
+    private volatile long calculatedBudgetNanos = 10_000_000L;
 
     public AdaptiveScheduler(PingFixConfig config) {
         this.config = config;
@@ -20,7 +20,6 @@ public class AdaptiveScheduler {
             return;
         }
 
-        // If client is experiencing lag, tighten non-critical processing slices to preserve responsiveness
         if (clientTickMs > 30.0 || frameTimeMs > 22.0 || jitterSpike) {
             calculatedBudgetNanos = Math.max(4_000_000L, calculatedBudgetNanos - 1_000_000L);
         } else if (clientTickMs < 16.0 && frameTimeMs < 14.0) {
@@ -28,7 +27,5 @@ public class AdaptiveScheduler {
         }
     }
 
-    public long getCalculatedBudgetNanos() {
-        return calculatedBudgetNanos;
-    }
+    public long getCalculatedBudgetNanos() { return calculatedBudgetNanos; }
 }

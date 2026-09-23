@@ -5,8 +5,8 @@ import com.arsham.pingfix.tick.WorkloadBudget;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
- * High-performance protocol-aware packet scheduler.
- * Prioritizes combat and interaction packets while batching bulk payloads during lag.
+ * Protocol-aware packet scheduler.
+ * High-priority combat and interaction tasks execute immediately.
  * 100% Anti-Cheat safe.
  * Created by Arsham for Minecraft 1.21.11 Fabric.
  */
@@ -35,7 +35,6 @@ public class PacketScheduler {
 
     public void processScheduledTasks(WorkloadBudget budget) {
         Runnable task;
-        // Priority tasks (combat, interaction, health) execute immediately
         while ((task = priorityTasks.poll()) != null) {
             try {
                 task.run();
@@ -44,7 +43,6 @@ public class PacketScheduler {
             }
         }
 
-        // Deferred tasks (distant chunks/entities) execute within adaptive budget
         while (budget.hasRemainingBudget() && (task = deferredTasks.poll()) != null) {
             try {
                 task.run();
